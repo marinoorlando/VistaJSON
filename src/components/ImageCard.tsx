@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import type { FoundImage } from '@/types';
 import { Link2, Info } from 'lucide-react';
-import { getParentObject } from '@/lib/json-utils';
+import { getParentObject, findKeyForOffset, LITERAL_DATA_URI_KEYWORDS } from '@/lib/json-utils';
 import { Input } from '@/components/ui/input';
 
 
@@ -14,72 +14,6 @@ interface ImageCardProps {
   image: FoundImage;
   parsedJsonData: any | null;
 }
-
-const DATA_URI_LIKE_KEYS_LOWERCASE = ['datauri', 'imagedatauri', 'base64', 'imagedata', 'photodatauri'];
-
-function findKeyForOffset(jsonString: string, offset: number): string | null {
-  let currentPos = offset;
-
-  // Scan backwards to find the opening quote of the string value this offset is in.
-  let valueOpenQuote = -1;
-  for (let i = currentPos; i >= 0; i--) {
-    if (jsonString[i] === '"') {
-      let slashes = 0;
-      for (let j = i - 1; j >= 0 && jsonString[j] === '\\'; j--) slashes++;
-      if (slashes % 2 === 0) { // Not an escaped quote
-        // Check if this quote is preceded by a colon (it's an opening quote of a value)
-        let k = i - 1;
-        while (k >= 0 && (jsonString[k] === ' ' || jsonString[k] === '\n' || jsonString[k] === '\r' || jsonString[k] === '\t')) k--; // skip whitespace
-        if (k >= 0 && jsonString[k] === ':') {
-          valueOpenQuote = i;
-          break;
-        }
-      }
-    }
-  }
-  if (valueOpenQuote === -1) return null;
-
-  // Scan backwards from valueOpenQuote to find the colon
-  let colonPos = -1;
-  for (let i = valueOpenQuote - 1; i >= 0; i--) {
-    if (jsonString[i] === ':') {
-      colonPos = i;
-      break;
-    }
-  }
-  if (colonPos === -1) return null;
-
-  // Scan backwards from colonPos to find the key's closing quote
-  let keyCloseQuote = -1;
-  for (let i = colonPos - 1; i >= 0; i--) {
-    if (jsonString[i] === '"') {
-      let slashes = 0;
-      for (let j = i - 1; j >= 0 && jsonString[j] === '\\'; j--) slashes++;
-      if (slashes % 2 === 0) {
-        keyCloseQuote = i;
-        break;
-      }
-    }
-  }
-  if (keyCloseQuote === -1) return null;
-
-  // Scan backwards from keyCloseQuote to find the key's opening quote
-  let keyOpenQuote = -1;
-  for (let i = keyCloseQuote - 1; i >= 0; i--) {
-    if (jsonString[i] === '"') {
-      let slashes = 0;
-      for (let j = i - 1; j >= 0 && jsonString[j] === '\\'; j--) slashes++;
-      if (slashes % 2 === 0) {
-        keyOpenQuote = i;
-        break;
-      }
-    }
-  }
-  if (keyOpenQuote === -1) return null;
-
-  return jsonString.substring(keyOpenQuote + 1, keyCloseQuote);
-}
-
 
 const ImageCard: React.FC<ImageCardProps> = ({ image, parsedJsonData }) => {
   const [hasError, setHasError] = useState(false);
@@ -137,23 +71,18 @@ const ImageCard: React.FC<ImageCardProps> = ({ image, parsedJsonData }) => {
     let calculatedMatchCount = 0;
     
     const tempHighlightedHtml = jsonString.replace(searchRegex, (match, offset) => {
-      const keyOfMatch = findKeyForOffset(jsonString, offset);
-      if (keyOfMatch && DATA_URI_LIKE_KEYS_LOWERCASE.includes(keyOfMatch.toLowerCase())) {
-        return match; // Don't highlight if it's in a data URI value
+      const keyOfMatch = findKeyForOffset(jsonString, offset as number);
+      if (keyOfMatch && LITERAL_DATA_URI_KEYWORDS.includes(keyOfMatch.toLowerCase())) {
+        return match; 
       }
-      // We will count actual highlights later by iterating again or by counting marks.
-      // For now, just return the mark for replacement.
       return `<mark class="bg-accent text-accent-foreground px-0.5 py-0 rounded">${match}</mark>`;
     });
-
-    // Recalculate count based on actual marks made
-    // This is more accurate if the search term could itself contain characters that look like part of a mark tag
-    // A simpler way is to count during the replace if we are sure the search term cannot create false positive marks
+    
     let currentMatch;
-    const globalSearchRegex = new RegExp(escapedSearchTerm, 'gi'); // Need a fresh regex for exec
+    const globalSearchRegex = new RegExp(escapedSearchTerm, 'gi');
     while ((currentMatch = globalSearchRegex.exec(jsonString)) !== null) {
         const keyOfMatch = findKeyForOffset(jsonString, currentMatch.index);
-        if (!(keyOfMatch && DATA_URI_LIKE_KEYS_LOWERCASE.includes(keyOfMatch.toLowerCase()))) {
+        if (!(keyOfMatch && LITERAL_DATA_URI_KEYWORDS.includes(keyOfMatch.toLowerCase()))) {
             calculatedMatchCount++;
         }
     }
@@ -200,7 +129,7 @@ const ImageCard: React.FC<ImageCardProps> = ({ image, parsedJsonData }) => {
         }}
       />
     );
-  } else { // 'url' but not absolute, or some other unhandled case
+  } else { 
     imageContent = (
       <img
         src="https://placehold.co/300x200.png?text=Ruta+Inválida"
@@ -246,7 +175,7 @@ const ImageCard: React.FC<ImageCardProps> = ({ image, parsedJsonData }) => {
                   type="search"
                   placeholder="Buscar en detalles (no en Data URIs)..."
                   value={dialogSearchTerm}
-                  onChange={(e) => setDialogSearchTerm(e.target.value)}
+                  onChange={(e) => setDialogSearchTerm(e.target.value.trimStart())}
                   className="h-9 text-sm"
                 />
                 {dialogSearchTerm.trim() && (
@@ -269,4 +198,3 @@ const ImageCard: React.FC<ImageCardProps> = ({ image, parsedJsonData }) => {
 };
 
 export default ImageCard;
-

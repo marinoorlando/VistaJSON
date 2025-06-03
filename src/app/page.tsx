@@ -9,7 +9,7 @@ import FileListPanel from '@/components/FileListPanel';
 import JsonViewer from '@/components/JsonViewer';
 import ImagePreviewPanel from '@/components/ImagePreviewPanel';
 import type { UploadedFile, FoundImage } from '@/types';
-import { findImagesInJson, getAllUniqueKeys, getParentObject } from '@/lib/json-utils';
+import { findImagesInJson, getAllUniqueKeys, getParentObject, findKeyForOffset, LITERAL_DATA_URI_KEYWORDS } from '@/lib/json-utils';
 import { suggestImageFields } from '@/ai/flows/suggest-image-fields';
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from 'lucide-react';
@@ -94,7 +94,7 @@ export default function HomePage() {
     setParsedJsonData(file.parsedContent);
     setIsLoadingJson(false);
     setStartingImageIndex(0);
-    setImageSearchTerm(''); // Reset search term on new file
+    setImageSearchTerm(''); 
 
     setIsLoadingSuggestions(true);
     try {
@@ -203,33 +203,58 @@ export default function HomePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedFileId, processFileContent]); 
 
-  // Filter images based on search term
   const filteredImageSuggestions = useMemo(() => {
-    if (!imageSearchTerm.trim()) {
+    const trimmedSearchTerm = imageSearchTerm.trim();
+    if (!trimmedSearchTerm) {
       return imageSuggestions;
     }
-    const searchTermLower = imageSearchTerm.toLowerCase();
+    const searchTermLower = trimmedSearchTerm.toLowerCase();
+  
     return imageSuggestions.filter(image => {
       const pathMatch = image.jsonPath.toLowerCase().includes(searchTermLower);
-      const valueMatch = image.value.toLowerCase().includes(searchTermLower);
-      
+      if (pathMatch) return true;
+  
+      let valueMatch = false;
+      if (image.type === 'url') { // Only search in the value if it's a URL string
+        valueMatch = image.value.toLowerCase().includes(searchTermLower);
+        if (valueMatch) return true;
+      }
+      // If image.type === 'dataUri', we explicitly DO NOT search in its value here.
+  
       let parentObjectMatch = false;
       if (parsedJsonData) {
         const parentObject = getParentObject(parsedJsonData, image.jsonPath);
         if (parentObject) {
           try {
-            const parentObjectString = JSON.stringify(parentObject).toLowerCase();
-            parentObjectMatch = parentObjectString.includes(searchTermLower);
+            const parentObjectString = JSON.stringify(parentObject); // Keep original case for findKeyForOffset
+            const parentObjectStringLower = parentObjectString.toLowerCase();
+            
+            let currentIndex = 0;
+            while (currentIndex < parentObjectStringLower.length) {
+              const matchIndex = parentObjectStringLower.indexOf(searchTermLower, currentIndex);
+              if (matchIndex === -1) break; // No more matches
+
+              const keyOfMatch = findKeyForOffset(parentObjectString, matchIndex);
+              if (keyOfMatch && LITERAL_DATA_URI_KEYWORDS.includes(keyOfMatch.toLowerCase())) {
+                // This match is inside a data URI field value, ignore it for parentObjectMatch
+              } else {
+                // This match is NOT inside a data URI field value, so parentObjectMatch is true
+                parentObjectMatch = true;
+                break; 
+              }
+              currentIndex = matchIndex + searchTermLower.length; // Continue searching after the current match
+            }
           } catch (e) {
-            console.error("Error stringifying parent object for search:", e);
+            console.error("Error processing parent object for search:", e);
           }
         }
       }
-      return pathMatch || valueMatch || parentObjectMatch;
+      if (parentObjectMatch) return true;
+  
+      return false; 
     });
   }, [imageSuggestions, imageSearchTerm, parsedJsonData]);
 
-  // Reset pagination when search term changes
   useEffect(() => {
     setStartingImageIndex(0);
   }, [imageSearchTerm]);
