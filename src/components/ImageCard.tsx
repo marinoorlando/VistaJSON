@@ -4,7 +4,6 @@ import NextImage from 'next/image';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-// ScrollArea import removed as it's no longer used in this file
 import type { FoundImage } from '@/types';
 import { Link2, Info } from 'lucide-react';
 import { getParentObject } from '@/lib/json-utils';
@@ -28,7 +27,6 @@ const ImageCard: React.FC<ImageCardProps> = ({ image, parsedJsonData }) => {
   }, [image.value]);
 
   useEffect(() => {
-    // Reset search term when modal closes or detailObject changes
     if (!isDetailModalOpen) {
       setDialogSearchTerm("");
     }
@@ -36,7 +34,7 @@ const ImageCard: React.FC<ImageCardProps> = ({ image, parsedJsonData }) => {
 
   const handleViewDetails = () => {
     if (!parsedJsonData) return;
-    setDialogSearchTerm(""); // Reset search on new view
+    setDialogSearchTerm(""); 
 
     const parentObj = getParentObject(parsedJsonData, image.jsonPath);
     if (parentObj) {
@@ -61,11 +59,15 @@ const ImageCard: React.FC<ImageCardProps> = ({ image, parsedJsonData }) => {
     if (!detailObject) return { highlightedJsonHtml: "No hay datos para mostrar.", matchCount: 0 };
 
     const jsonString = JSON.stringify(detailObject, null, 2);
-    if (!dialogSearchTerm) {
+    const searchTerm = dialogSearchTerm.trim(); // Trim the search term
+
+    if (!searchTerm) { // if search term is empty after trimming
       return { highlightedJsonHtml: jsonString, matchCount: 0 };
     }
 
-    const regex = new RegExp(dialogSearchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+    const escapedSearchTerm = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(escapedSearchTerm, 'gi');
+    
     let count = 0;
     const highlighted = jsonString.replace(regex, (match) => {
       count++;
@@ -109,7 +111,6 @@ const ImageCard: React.FC<ImageCardProps> = ({ image, parsedJsonData }) => {
         data-ai-hint="digital art"
         onError={(e) => {
           const target = e.target as HTMLImageElement;
-          // Fallback to a placeholder to avoid error propogation
           target.srcset = 'https://placehold.co/300x200.png?text=Error+Al+Cargar';
           target.src = 'https://placehold.co/300x200.png?text=Error+Al+Cargar';
         }}
@@ -163,7 +164,7 @@ const ImageCard: React.FC<ImageCardProps> = ({ image, parsedJsonData }) => {
                   onChange={(e) => setDialogSearchTerm(e.target.value)}
                   className="h-9 text-sm"
                 />
-                {dialogSearchTerm && (
+                {dialogSearchTerm.trim() && (
                   <p className="text-xs text-muted-foreground shrink-0">
                     {matchCount} {matchCount === 1 ? 'coincidencia' : 'coincidencias'}
                   </p>
