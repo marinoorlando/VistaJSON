@@ -42,9 +42,9 @@ export function findImagesInJson(jsonData: any, suggestedFields: string[] = []):
         // 1. Check for Data URIs within the string using regex
         DATA_URI_REGEX.lastIndex = 0; // Reset regex state for global flag
         const dataUriMatch = DATA_URI_REGEX.exec(value);
-        if (dataUriMatch) {
+        if (dataUriMatch && dataUriMatch[0]) {
           imageType = 'dataUri';
-          potentialImageUrl = dataUriMatch[0]; // The full Data URI matched
+          potentialImageUrl = dataUriMatch[0].trim(); // Trim whitespace
         } 
         // 2. Else, check for absolute URLs
         else if (value.startsWith('http://') || value.startsWith('https://')) {
@@ -76,3 +76,4 @@ export function findImagesInJson(jsonData: any, suggestedFields: string[] = []):
   traverse(jsonData, '');
   return images;
 }
+
