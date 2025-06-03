@@ -58,6 +58,20 @@ export default function HomePage() {
     event.target.value = ''; // Reset file input
   };
 
+  const handleRemoveFile = (fileIdToRemove: string) => {
+    setUploadedFiles(prevFiles => prevFiles.filter(file => file.id !== fileIdToRemove));
+    if (selectedFileId === fileIdToRemove) {
+      setSelectedFileId(null);
+      setParsedJsonData(null);
+      setImageSuggestions([]);
+    }
+    const removedFile = uploadedFiles.find(f => f.id === fileIdToRemove);
+    toast({
+      title: "Archivo Eliminado",
+      description: `El archivo "${removedFile?.name || 'seleccionado'}" ha sido eliminado de la lista.`,
+    });
+  };
+
   const processFileContent = useCallback(async (file: UploadedFile | null) => {
     if (!file) {
       setParsedJsonData(null);
@@ -117,6 +131,11 @@ export default function HomePage() {
         const currentSelectedFile = uploadedFiles.find(f => f.id === selectedFileId);
         if (currentSelectedFile) {
             processFileContent(currentSelectedFile);
+        } else {
+          // If the selected file was removed, and it's not in uploadedFiles anymore
+          setSelectedFileId(null);
+          setParsedJsonData(null);
+          setImageSuggestions([]);
         }
     } else if (!selectedFileId) {
         setParsedJsonData(null);
@@ -125,7 +144,7 @@ export default function HomePage() {
         setIsLoadingSuggestions(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedFileId, processFileContent]);
+  }, [selectedFileId, processFileContent, uploadedFiles]); // Added uploadedFiles dependency
 
   const handleToggleJsonContent = () => {
     setShowJsonContent(prev => !prev);
@@ -139,6 +158,7 @@ export default function HomePage() {
           files={uploadedFiles}
           selectedFileId={selectedFileId}
           onSelectFile={setSelectedFileId}
+          onRemoveFile={handleRemoveFile}
         />
         <section className="flex-1 p-4 flex flex-col gap-4 overflow-hidden">
           {selectedFileId && (isLoadingJson || isLoadingSuggestions) && (
