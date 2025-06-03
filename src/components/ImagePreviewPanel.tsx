@@ -1,3 +1,4 @@
+
 import type React from 'react';
 import type { FoundImage } from '@/types';
 import ImageCard from './ImageCard';
@@ -24,7 +25,7 @@ const ImagePreviewPanel: React.FC<ImagePreviewPanelProps> = ({ images, isLoading
           La detección incluye campos con nombres comunes (ej: image, url, path), rutas URL directas y Data URIs.
         </CardDescription>
       </CardHeader>
-      <CardContent className="flex-1 overflow-hidden p-0">
+      <CardContent className="flex-1 overflow-hidden p-0 min-h-0">
         <ScrollArea className="h-full p-4">
           {isLoading ? (
             <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
