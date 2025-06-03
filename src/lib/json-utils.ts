@@ -13,13 +13,21 @@ export const LITERAL_DATA_URI_KEYWORDS = [
   "imagefile",
   "base64image",
   "filedata",
-  "attachmentdata" // Another common one for embedded file data
+  "attachmentdata"
 ];
 // Keywords that suggest the field's value is a path or URL to an image
 const GENERIC_IMAGE_URL_KEYWORDS = ["image", "url", "path", "uri", "foto", "img", "icon", "avatar", "thumbnail", "picture"];
 
 // Regex to match standard Data URIs for images, permissive for MIME types
 const DATA_URI_REGEX = /data:image\/[a-zA-Z0-9.+*-]+;base64,([A-Za-z0-9+/=]+)/gi;
+
+// Claves que, aunque relacionadas con archivos, probablemente no son la imagen visualizable en sí.
+const EXPLICITLY_SKIPPED_IMAGE_KEYS = [
+  "originalfilename",
+  "original_filename",
+  "originalfilename", 
+  "filename" // Si la clave es *exactamente* "filename"
+];
 
 
 // Helper function to extract all unique keys from a JSON object
@@ -53,11 +61,27 @@ export function findImagesInJson(jsonData: any, suggestedFields: string[] = []):
 
     Object.entries(obj).forEach(([key, value]) => {
       const newPath = currentPath ? `${currentPath}.${key}` : key;
+      const lowerKey = key.toLowerCase();
+
+      // Excluir explícitamente ciertas claves de la detección de imágenes
+      if (EXPLICITLY_SKIPPED_IMAGE_KEYS.includes(lowerKey)) {
+        // Si el valor es un objeto o array, aún recorrerlo por si contiene otros campos de imagen
+        if (typeof value === 'object' && value !== null) {
+          if (Array.isArray(value)) {
+            value.forEach((item, index) => {
+              traverse(item, `${newPath}[${index}]`);
+            });
+          } else {
+            traverse(value, newPath);
+          }
+        }
+        return; // Omitir este par clave-valor para la detección directa de imágenes
+      }
+
       if (typeof value === 'string') {
         let imageType: FoundImage['type'] | null = null;
         let potentialImageUrl = value; 
-        const lowerKey = key.toLowerCase();
-
+        
         DATA_URI_REGEX.lastIndex = 0; 
         const dataUriMatch = DATA_URI_REGEX.exec(potentialImageUrl);
         
@@ -66,12 +90,12 @@ export function findImagesInJson(jsonData: any, suggestedFields: string[] = []):
           potentialImageUrl = dataUriMatch[0].trim();
         } else if (LITERAL_DATA_URI_KEYWORDS.some(k => lowerKey.includes(k))) {
           imageType = 'dataUri';
-          potentialImageUrl = potentialImageUrl.trim();
+          potentialImageUrl = potentialImageUrl.trim(); // Asumir que es un Data URI incluso si no tiene el prefijo completo
         } else if (potentialImageUrl.trim().startsWith('http://') || potentialImageUrl.trim().startsWith('https://')) {
           imageType = 'url';
           potentialImageUrl = potentialImageUrl.trim();
         } else if (suggestedFields.includes(key) || GENERIC_IMAGE_URL_KEYWORDS.some(k => lowerKey.includes(k))) {
-             imageType = 'url';
+             imageType = 'url'; // Podría ser una ruta relativa o un nombre de archivo que la IA considera imagen
              potentialImageUrl = potentialImageUrl.trim();
         }
 
@@ -101,7 +125,7 @@ export function getParentObject(jsonData: any, imagePath: string): any | null {
   const pathSegments = normalizedPath.split('.');
 
   if (pathSegments.length <= 1) {
-    return jsonData; // Image is at the root, parent is the root object itself
+    return jsonData; 
   }
 
   let currentObject = jsonData;
@@ -117,7 +141,6 @@ export function getParentObject(jsonData: any, imagePath: string): any | null {
 }
 
 export function findKeyForOffset(jsonString: string, offset: number): string | null {
-  // Scan backwards to find the opening quote of the string value this offset is in.
   let valueOpenQuote = -1;
   for (let i = offset; i >= 0; i--) {
     if (jsonString[i] === '"') {
