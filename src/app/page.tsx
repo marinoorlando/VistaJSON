@@ -24,8 +24,8 @@ export default function HomePage() {
   const [showJsonContent, setShowJsonContent] = useState(false);
   const { toast } = useToast();
 
-  const [imagesToShow, setImagesToShow] = useState<number>(12);
-  const [imageGridColumns, setImageGridColumns] = useState<number>(3);
+  const [imagesToShow, setImagesToShow] = useState<number>(2);
+  const [imageGridColumns, setImageGridColumns] = useState<number>(2);
   const [startingImageIndex, setStartingImageIndex] = useState<number>(0); // 0-based
 
   const selectedFile = uploadedFiles.find(f => f.id === selectedFileId) || null;
