@@ -71,12 +71,14 @@ export default function HomePage() {
 
     let aiSuggestedFields: string[] = [];
     try {
-      // Call AI to suggest image fields
       const aiSuggestionsOutput = await suggestImageFields({ jsonContent: file.content });
       aiSuggestedFields = aiSuggestionsOutput.imageFields || [];
     } catch (error: any) {
       console.error("Error al obtener sugerencias de imágenes de la IA:", error);
-      if (error.message && error.message.includes("429")) {
+      const errorMessage = error.message ? String(error.message).toLowerCase() : "";
+      const errorString = error.toString ? String(error.toString()).toLowerCase() : "";
+
+      if (errorMessage.includes("429") || errorString.includes("429") || errorMessage.includes("quota") || errorString.includes("quota")) {
         toast({
           title: "Límite de Tasa Alcanzado",
           description: "Se ha excedido el límite de solicitudes a la IA. Se utilizará la detección básica de imágenes. Por favor, inténtelo más tarde o revise su plan de API.",
@@ -92,7 +94,6 @@ export default function HomePage() {
     }
 
     try {
-      // Find images using parsed content and AI suggestions (which might be empty if AI failed)
       const foundImages = findImagesInJson(file.parsedContent, aiSuggestedFields);
       setImageSuggestions(foundImages);
     } catch (error) {
@@ -102,7 +103,6 @@ export default function HomePage() {
           description: "Ocurrió un error al intentar detectar imágenes en el JSON.",
           variant: "destructive",
         });
-        // Fallback to finding images without AI suggestions if a general error occurs here
         const foundImages = findImagesInJson(file.parsedContent);
         setImageSuggestions(foundImages);
     }
@@ -124,7 +124,7 @@ export default function HomePage() {
         setIsLoadingSuggestions(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedFileId, processFileContent]); // uploadedFiles is removed to prevent re-processing on every file list change unless selectedFileId changes. processFileContent is stable.
+  }, [selectedFileId, processFileContent]);
 
 
   return (
@@ -167,4 +167,3 @@ export default function HomePage() {
     </div>
   );
 }
-
