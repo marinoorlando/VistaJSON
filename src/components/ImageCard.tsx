@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import NextImage from 'next/image';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import type { FoundImage } from '@/types';
 import { Link2, Info } from 'lucide-react';
 import { getParentObject } from '@/lib/json-utils';
+import { Input } from '@/components/ui/input';
 
 
 interface ImageCardProps {
@@ -20,33 +21,59 @@ const ImageCard: React.FC<ImageCardProps> = ({ image, parsedJsonData }) => {
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [detailObject, setDetailObject] = useState<any>(null);
   const [detailObjectPath, setDetailObjectPath] = useState<string>("");
+  const [dialogSearchTerm, setDialogSearchTerm] = useState("");
 
   useEffect(() => {
     setHasError(false);
   }, [image.value]);
 
+  useEffect(() => {
+    // Reset search term when modal closes or detailObject changes
+    if (!isDetailModalOpen) {
+      setDialogSearchTerm("");
+    }
+  }, [isDetailModalOpen]);
+
   const handleViewDetails = () => {
     if (!parsedJsonData) return;
+    setDialogSearchTerm(""); // Reset search on new view
 
     const parentObj = getParentObject(parsedJsonData, image.jsonPath);
     if (parentObj) {
       setDetailObject(parentObj);
 
       const pathSegments = image.jsonPath.replace(/\[(\d+)\]/g, '.$1').split('.');
-      let parentDisplayPath = "Objeto Raíz"; // Default for root or unresolvable parent path for display
+      let parentDisplayPath = "Objeto Raíz"; 
       if (pathSegments.length > 1) {
-        pathSegments.pop(); // Remove the image field name itself
-        parentDisplayPath = pathSegments.join('.').replace(/\.(\d+)/g, '[$1]'); // Restore array notation
+        pathSegments.pop(); 
+        parentDisplayPath = pathSegments.join('.').replace(/\.(\d+)/g, '[$1]'); 
       }
       setDetailObjectPath(parentDisplayPath);
       setIsDetailModalOpen(true);
     } else {
-      // Fallback if parent object can't be determined
       setDetailObject({ error: "No se pudo determinar el objeto contenedor." });
-      setDetailObjectPath(image.jsonPath); // Show the full path as context
+      setDetailObjectPath(image.jsonPath); 
       setIsDetailModalOpen(true);
     }
   };
+
+  const { highlightedJsonHtml, matchCount } = useMemo(() => {
+    if (!detailObject) return { highlightedJsonHtml: "No hay datos para mostrar.", matchCount: 0 };
+
+    const jsonString = JSON.stringify(detailObject, null, 2);
+    if (!dialogSearchTerm) {
+      return { highlightedJsonHtml: jsonString, matchCount: 0 };
+    }
+
+    const regex = new RegExp(dialogSearchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+    let count = 0;
+    const highlighted = jsonString.replace(regex, (match) => {
+      count++;
+      return `<mark class="bg-accent text-accent-foreground px-0.5 py-0 rounded">${match}</mark>`;
+    });
+    
+    return { highlightedJsonHtml: highlighted, matchCount: count };
+  }, [detailObject, dialogSearchTerm]);
 
 
   const isAbsoluteUrl = image.type === 'url' && (image.value.startsWith('http://') || image.value.startsWith('https://'));
@@ -82,13 +109,13 @@ const ImageCard: React.FC<ImageCardProps> = ({ image, parsedJsonData }) => {
         data-ai-hint="digital art"
         onError={(e) => {
           const target = e.target as HTMLImageElement;
+          // Fallback to a placeholder to avoid error propogation
           target.srcset = 'https://placehold.co/300x200.png?text=Error+Al+Cargar';
           target.src = 'https://placehold.co/300x200.png?text=Error+Al+Cargar';
         }}
       />
     );
   } else {
-    // For 'url' types that are not absolute (e.g., relative paths, malformed) or if type is somehow else
     imageContent = (
       <img
         src="https://placehold.co/300x200.png?text=Ruta+Inválida"
@@ -121,16 +148,30 @@ const ImageCard: React.FC<ImageCardProps> = ({ image, parsedJsonData }) => {
                 <Info className="h-4 w-4" />
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-[600px] w-[90vw]">
+            <DialogContent className="sm:max-w-[700px] w-[90vw]">
               <DialogHeader>
                 <DialogTitle>Detalles del Objeto Contenedor</DialogTitle>
                 <DialogDescription>
                   Mostrando el objeto JSON que contiene la imagen. Ruta del objeto: <code className="font-mono bg-muted px-1 py-0.5 rounded text-xs">{detailObjectPath}</code>
                 </DialogDescription>
               </DialogHeader>
-              <ScrollArea className="max-h-[60vh] mt-4 border rounded-md">
+              <div className="my-2 flex flex-col sm:flex-row sm:items-center gap-2">
+                <Input
+                  type="search"
+                  placeholder="Buscar en detalles..."
+                  value={dialogSearchTerm}
+                  onChange={(e) => setDialogSearchTerm(e.target.value)}
+                  className="h-9 text-sm"
+                />
+                {dialogSearchTerm && (
+                  <p className="text-xs text-muted-foreground shrink-0">
+                    {matchCount} {matchCount === 1 ? 'coincidencia' : 'coincidencias'}
+                  </p>
+                )}
+              </div>
+              <ScrollArea className="max-h-[55vh] mt-2 border rounded-md">
                 <pre className="text-sm bg-card p-3 font-code overflow-auto">
-                  <code>{detailObject ? JSON.stringify(detailObject, null, 2) : "No hay datos para mostrar."}</code>
+                  <code dangerouslySetInnerHTML={{ __html: highlightedJsonHtml }} />
                 </pre>
               </ScrollArea>
             </DialogContent>
