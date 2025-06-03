@@ -211,18 +211,18 @@ export default function HomePage() {
           {!(selectedFileId && (isLoadingJson || isLoadingSuggestions)) && (
           <>
             <div className="flex-1 min-h-[300px] md:min-h-0 md:h-1/2">
+              <ImagePreviewPanel 
+                images={imageSuggestions} 
+                isLoading={isLoadingSuggestions} 
+                jsonSelected={!!selectedFileId}
+              />
+            </div>
+            <div className="flex-1 min-h-[300px] md:min-h-0 md:h-1/2">
               <JsonViewer 
                 data={parsedJsonData} 
                 isLoading={isLoadingJson}
                 showContent={showJsonContent}
                 onToggleShowContent={handleToggleJsonContent}
-              />
-            </div>
-            <div className="flex-1 min-h-[300px] md:min-h-0 md:h-1/2">
-              <ImagePreviewPanel 
-                images={imageSuggestions} 
-                isLoading={isLoadingSuggestions} 
-                jsonSelected={!!selectedFileId}
               />
             </div>
           </>
