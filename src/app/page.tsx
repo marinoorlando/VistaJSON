@@ -9,7 +9,7 @@ import FileListPanel from '@/components/FileListPanel';
 import JsonViewer from '@/components/JsonViewer';
 import ImagePreviewPanel from '@/components/ImagePreviewPanel';
 import type { UploadedFile, FoundImage } from '@/types';
-import { findImagesInJson } from '@/lib/json-utils';
+import { findImagesInJson, getAllUniqueKeys } from '@/lib/json-utils';
 import { suggestImageFields } from '@/ai/flows/suggest-image-fields';
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from 'lucide-react';
@@ -34,11 +34,12 @@ export default function HomePage() {
     const files = event.target.files;
     if (!files) return;
 
+    setIsLoadingJson(true); // Indicate loading during file processing
     const newUploadedFiles: UploadedFile[] = [];
     for (const file of Array.from(files)) {
       try {
         const content = await file.text();
-        const parsedContent = JSON.parse(content);
+        const parsedContent = JSON.parse(content); // This can be slow for huge files
         newUploadedFiles.push({
           id: `${file.name}-${Date.now()}`, // Simple unique ID
           name: file.name,
@@ -59,6 +60,7 @@ export default function HomePage() {
     if (newUploadedFiles.length > 0 && !selectedFileId) {
       setSelectedFileId(newUploadedFiles[0].id);
     }
+    setIsLoadingJson(false); // Done with initial parsing
     event.target.value = ''; // Reset file input
   };
 
@@ -85,63 +87,71 @@ export default function HomePage() {
       return;
     }
 
-    setIsLoadingJson(true);
+    setIsLoadingJson(true); // For setting parsedJsonData display
     setParsedJsonData(file.parsedContent);
     setIsLoadingJson(false);
-    setStartingImageIndex(0); // Reset starting index for new file content
+    setStartingImageIndex(0);
 
-    setIsLoadingSuggestions(true); // Covers AI + local finding
+    setIsLoadingSuggestions(true);
     try {
+      const extractedKeys = getAllUniqueKeys(file.parsedContent);
       let aiSuggestedFields: string[] = [];
       const MAX_RETRIES = 1; 
       let attempt = 0;
 
-      while (attempt <= MAX_RETRIES) {
-        try {
-          const aiSuggestionsOutput = await suggestImageFields({ jsonContent: file.content });
-          aiSuggestedFields = aiSuggestionsOutput.imageFields || [];
-          break; 
-        } catch (error: any) {
-          console.error(`Error en suggestImageFields (intento ${attempt + 1}/${MAX_RETRIES + 1}):`, error);
-          const errorMessage = error.message ? String(error.message).toLowerCase() : "";
-          const errorString = error.toString ? String(error.toString()).toLowerCase() : "";
-          const isQuotaError = errorMessage.includes("429") || errorString.includes("429") || errorMessage.includes("quota") || errorString.includes("quota") || errorMessage.includes("rate limit") || errorString.includes("rate limit") ;
-          
-          if (isQuotaError && attempt < MAX_RETRIES) {
-            attempt++; 
-            let delaySeconds = 30; 
-            const retryDelayMatch = errorString.match(/"retryDelay":"(\d+)s"/);
-            if (retryDelayMatch && retryDelayMatch[1]) {
-              const parsedDelay = parseInt(retryDelayMatch[1], 10);
-              if (!isNaN(parsedDelay) && parsedDelay > 0) {
-                delaySeconds = parsedDelay;
-              }
-            }
-            toast({
-              title: "Límite de IA Temporal",
-              description: `Se reintentará en ${delaySeconds} segundos. (Reintento ${attempt}/${MAX_RETRIES})`,
-              variant: "default",
-            });
-            await new Promise(resolve => setTimeout(resolve, delaySeconds * 1000));
-          } else if (isQuotaError) { 
-            toast({
-              title: "Límite de Tasa Alcanzado",
-              description: "Se excedió el límite de la IA. Se usará detección básica.",
-              variant: "destructive",
-            });
-            aiSuggestedFields = []; 
+      if (extractedKeys.length > 0) { // Only call AI if there are keys to analyze
+        while (attempt <= MAX_RETRIES) {
+          try {
+            // Pass only the extracted keys to the AI flow
+            const aiSuggestionsOutput = await suggestImageFields({ jsonKeys: extractedKeys });
+            aiSuggestedFields = aiSuggestionsOutput.imageFields || [];
             break; 
-          } else { 
-            toast({
-              title: "Error de IA",
-              description: "Error al comunicarse con la IA. Se usará detección básica.",
-              variant: "destructive",
-            });
-            aiSuggestedFields = [];
-            break;
+          } catch (error: any) {
+            console.error(`Error en suggestImageFields (intento ${attempt + 1}/${MAX_RETRIES + 1}):`, error);
+            const errorMessage = error.message ? String(error.message).toLowerCase() : "";
+            const errorString = error.toString ? String(error.toString()).toLowerCase() : "";
+            const isQuotaError = errorMessage.includes("429") || errorString.includes("429") || errorMessage.includes("quota") || errorString.includes("quota") || errorMessage.includes("rate limit") || errorString.includes("rate limit") ;
+            
+            if (isQuotaError && attempt < MAX_RETRIES) {
+              attempt++; 
+              let delaySeconds = 30; 
+              const retryDelayMatch = errorString.match(/"retryDelay":"(\d+)s"/);
+              if (retryDelayMatch && retryDelayMatch[1]) {
+                const parsedDelay = parseInt(retryDelayMatch[1], 10);
+                if (!isNaN(parsedDelay) && parsedDelay > 0) {
+                  delaySeconds = parsedDelay;
+                }
+              }
+              toast({
+                title: "Límite de IA Temporal",
+                description: `Se reintentará en ${delaySeconds} segundos. (Reintento ${attempt}/${MAX_RETRIES})`,
+                variant: "default",
+              });
+              await new Promise(resolve => setTimeout(resolve, delaySeconds * 1000));
+            } else if (isQuotaError) { 
+              toast({
+                title: "Límite de Tasa Alcanzado",
+                description: "Se excedió el límite de la IA. Se usará detección básica.",
+                variant: "destructive",
+              });
+              aiSuggestedFields = []; 
+              break; 
+            } else { 
+              toast({
+                title: "Error de IA",
+                description: "Error al comunicarse con la IA. Se usará detección básica.",
+                variant: "destructive",
+              });
+              aiSuggestedFields = [];
+              break;
+            }
           }
         }
+      } else {
+        // No keys extracted, perhaps an empty JSON or non-object JSON
+        aiSuggestedFields = [];
       }
+
 
       try {
         const foundImages = findImagesInJson(file.parsedContent, aiSuggestedFields);
@@ -153,7 +163,8 @@ export default function HomePage() {
           description: "Ocurrió un error al procesar las imágenes. Se intentará detección básica.",
           variant: "destructive",
         });
-        const foundImages = findImagesInJson(file.parsedContent);
+        // Fallback to finding images without AI suggestions if findImagesInJson itself fails
+        const foundImages = findImagesInJson(file.parsedContent); 
         setImageSuggestions(foundImages);
       }
     } catch (overallError) {
@@ -163,7 +174,7 @@ export default function HomePage() {
         description: "Ocurrió un error inesperado al procesar el archivo.",
         variant: "destructive",
       });
-      setImageSuggestions([]);
+      setImageSuggestions([]); // Reset images on overall error
     } finally {
       setIsLoadingSuggestions(false);
     }
@@ -173,11 +184,12 @@ export default function HomePage() {
     if (selectedFileId && uploadedFiles.length > 0) {
         const currentSelectedFile = uploadedFiles.find(f => f.id === selectedFileId);
         if (currentSelectedFile) {
-            if (currentSelectedFile.parsedContent !== parsedJsonData) { // Process only if content is different or not yet processed
-              processFileContent(currentSelectedFile);
-            }
+            // Check if the content to be processed is actually different or if it's the first time
+            // For simplicity, always re-process if the selectedFile.id changes
+            // More sophisticated checks could compare file.content if needed, but parsedContent is derived.
+             processFileContent(currentSelectedFile);
         } else {
-          setSelectedFileId(null); // File was removed or ID is invalid
+          setSelectedFileId(null); 
           setParsedJsonData(null);
           setImageSuggestions([]);
           setStartingImageIndex(0);
@@ -190,7 +202,8 @@ export default function HomePage() {
         setStartingImageIndex(0);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedFileId, processFileContent, uploadedFiles]); // Removed parsedJsonData from deps to avoid re-processing on simple state set
+  }, [selectedFileId, processFileContent]); // processFileContent is memoized with useCallback
+                                          // uploadedFiles is not in deps, selectedFileId triggers the effect.
 
   const handleToggleJsonContent = () => {
     setShowJsonContent(prev => !prev);
@@ -218,7 +231,7 @@ export default function HomePage() {
             <div className="flex-1 min-h-[300px] md:min-h-0 md:h-1/2">
               <ImagePreviewPanel 
                 images={imageSuggestions} 
-                isLoading={isLoadingSuggestions} 
+                isLoading={isLoadingSuggestions && !selectedFileId} // Only show image panel loading if no file selected
                 jsonSelected={!!selectedFileId}
                 imagesToShow={imagesToShow}
                 setImagesToShow={setImagesToShow}
@@ -231,7 +244,7 @@ export default function HomePage() {
             <div className="flex-1 min-h-[300px] md:min-h-0 md:h-1/2">
               <JsonViewer 
                 data={parsedJsonData} 
-                isLoading={isLoadingJson}
+                isLoading={isLoadingJson && !selectedFileId} // Only show json viewer loading if no file selected
                 showContent={showJsonContent}
                 onToggleShowContent={handleToggleJsonContent}
               />
@@ -248,5 +261,3 @@ export default function HomePage() {
     </div>
   );
 }
-
-    
