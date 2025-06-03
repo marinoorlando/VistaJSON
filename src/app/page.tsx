@@ -21,6 +21,7 @@ export default function HomePage() {
   const [imageSuggestions, setImageSuggestions] = useState<FoundImage[]>([]);
   const [isLoadingJson, setIsLoadingJson] = useState(false);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+  const [showJsonContent, setShowJsonContent] = useState(true);
   const { toast } = useToast();
 
   const selectedFile = uploadedFiles.find(f => f.id === selectedFileId) || null;
@@ -126,6 +127,9 @@ export default function HomePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedFileId, processFileContent]);
 
+  const handleToggleJsonContent = () => {
+    setShowJsonContent(prev => !prev);
+  };
 
   return (
     <div className="h-screen flex flex-col bg-background text-foreground overflow-hidden">
@@ -146,7 +150,12 @@ export default function HomePage() {
           {!(selectedFileId && (isLoadingJson || isLoadingSuggestions)) && (
           <>
             <div className="flex-1 min-h-[300px] md:min-h-0 md:h-1/2">
-              <JsonViewer data={parsedJsonData} isLoading={isLoadingJson} />
+              <JsonViewer 
+                data={parsedJsonData} 
+                isLoading={isLoadingJson}
+                showContent={showJsonContent}
+                onToggleShowContent={handleToggleJsonContent}
+              />
             </div>
             <div className="flex-1 min-h-[300px] md:min-h-0 md:h-1/2">
               <ImagePreviewPanel 
