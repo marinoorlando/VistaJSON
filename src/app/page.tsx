@@ -80,48 +80,89 @@ export default function HomePage() {
     }
 
     setIsLoadingJson(true);
-    setIsLoadingSuggestions(true);
     setParsedJsonData(file.parsedContent);
     setIsLoadingJson(false);
 
-    let aiSuggestedFields: string[] = [];
+    setIsLoadingSuggestions(true); // Covers AI + local finding
     try {
-      const aiSuggestionsOutput = await suggestImageFields({ jsonContent: file.content });
-      aiSuggestedFields = aiSuggestionsOutput.imageFields || [];
-    } catch (error: any) {
-      console.error("Error al obtener sugerencias de imágenes de la IA:", error);
-      const errorMessage = error.message ? String(error.message).toLowerCase() : "";
-      const errorString = error.toString ? String(error.toString()).toLowerCase() : "";
+      let aiSuggestedFields: string[] = [];
+      const MAX_RETRIES = 1; // Total 2 attempts: 1 initial + 1 retry
+      let attempt = 0;
 
-      if (errorMessage.includes("429") || errorString.includes("429") || errorMessage.includes("quota") || errorString.includes("quota")) {
-        toast({
-          title: "Límite de Tasa Alcanzado",
-          description: "Se ha excedido el límite de solicitudes a la IA. Se utilizará la detección básica de imágenes. Por favor, inténtelo más tarde o revise su plan de API.",
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Error de IA",
-          description: "Ocurrió un error al comunicarse con el servicio de IA para sugerencias de imágenes.",
-          variant: "destructive",
-        });
+      // Attempt to get AI suggestions with retry logic
+      while (attempt <= MAX_RETRIES) {
+        try {
+          const aiSuggestionsOutput = await suggestImageFields({ jsonContent: file.content });
+          aiSuggestedFields = aiSuggestionsOutput.imageFields || [];
+          break; // AI call succeeded
+        } catch (error: any) {
+          console.error(`Error en suggestImageFields (intento ${attempt + 1}/${MAX_RETRIES + 1}):`, error);
+          const errorMessage = error.message ? String(error.message).toLowerCase() : "";
+          const errorString = error.toString ? String(error.toString()).toLowerCase() : "";
+          const isQuotaError = errorMessage.includes("429") || errorString.includes("429") || errorMessage.includes("quota") || errorString.includes("exceeded");
+
+          if (isQuotaError && attempt < MAX_RETRIES) {
+            attempt++; // This is now the current attempt number (1 for first retry, etc.)
+            let delaySeconds = 30; // Default delay
+            const retryDelayMatch = errorString.match(/"retryDelay":"(\d+)s"/);
+            if (retryDelayMatch && retryDelayMatch[1]) {
+              const parsedDelay = parseInt(retryDelayMatch[1], 10);
+              if (!isNaN(parsedDelay) && parsedDelay > 0) {
+                delaySeconds = parsedDelay;
+              }
+            }
+            toast({
+              title: "Límite de IA Temporal",
+              description: `Se reintentará en ${delaySeconds} segundos. (Reintento ${attempt}/${MAX_RETRIES})`,
+              variant: "default",
+            });
+            await new Promise(resolve => setTimeout(resolve, delaySeconds * 1000));
+            // Continue to next attempt in the while loop
+          } else if (isQuotaError) { // Quota error, max retries reached or it was the last attempt
+            toast({
+              title: "Límite de Tasa Alcanzado",
+              description: "Se excedió el límite de la IA. Se usará detección básica.",
+              variant: "destructive",
+            });
+            aiSuggestedFields = []; // Ensure no AI fields are used
+            break; // Exit AI suggestion attempts
+          } else { // Non-quota AI error
+            toast({
+              title: "Error de IA",
+              description: "Error al comunicarse con la IA. Se usará detección básica.",
+              variant: "destructive",
+            });
+            aiSuggestedFields = []; // Ensure no AI fields are used
+            break; // Exit AI suggestion attempts
+          }
+        }
       }
-    }
 
-    try {
-      const foundImages = findImagesInJson(file.parsedContent, aiSuggestedFields);
-      setImageSuggestions(foundImages);
-    } catch (error) {
-        console.error("Error al buscar imágenes en el JSON:", error);
+      // Now, find images using AI suggestions (if any) or basic logic
+      try {
+        const foundImages = findImagesInJson(file.parsedContent, aiSuggestedFields);
+        setImageSuggestions(foundImages);
+      } catch (findError) {
+        console.error("Error al buscar imágenes en el JSON (después de intentos de IA):", findError);
         toast({
-          title: "Error de Detección",
-          description: "Ocurrió un error al intentar detectar imágenes en el JSON.",
+          title: "Error de Detección de Imágenes",
+          description: "Ocurrió un error al procesar las imágenes. Se intentará detección básica.",
           variant: "destructive",
         });
+        // Fallback to findImagesInJson without any AI-suggested fields
         const foundImages = findImagesInJson(file.parsedContent);
         setImageSuggestions(foundImages);
-    }
-    finally {
+      }
+    } catch (overallError) {
+      // Catch-all for any unexpected errors during the entire suggestion process
+      console.error("Error general en processFileContent:", overallError);
+      toast({
+        title: "Error Inesperado",
+        description: "Ocurrió un error inesperado al procesar el archivo.",
+        variant: "destructive",
+      });
+      setImageSuggestions([]); // Clear suggestions on major failure
+    } finally {
       setIsLoadingSuggestions(false);
     }
   }, [toast]);
@@ -196,3 +237,4 @@ export default function HomePage() {
     </div>
   );
 }
+
