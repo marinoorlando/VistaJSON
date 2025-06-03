@@ -15,6 +15,72 @@ interface ImageCardProps {
   parsedJsonData: any | null;
 }
 
+const DATA_URI_LIKE_KEYS_LOWERCASE = ['datauri', 'imagedatauri', 'base64', 'imagedata', 'photodatauri'];
+
+function findKeyForOffset(jsonString: string, offset: number): string | null {
+  let currentPos = offset;
+
+  // Scan backwards to find the opening quote of the string value this offset is in.
+  let valueOpenQuote = -1;
+  for (let i = currentPos; i >= 0; i--) {
+    if (jsonString[i] === '"') {
+      let slashes = 0;
+      for (let j = i - 1; j >= 0 && jsonString[j] === '\\'; j--) slashes++;
+      if (slashes % 2 === 0) { // Not an escaped quote
+        // Check if this quote is preceded by a colon (it's an opening quote of a value)
+        let k = i - 1;
+        while (k >= 0 && (jsonString[k] === ' ' || jsonString[k] === '\n' || jsonString[k] === '\r' || jsonString[k] === '\t')) k--; // skip whitespace
+        if (k >= 0 && jsonString[k] === ':') {
+          valueOpenQuote = i;
+          break;
+        }
+      }
+    }
+  }
+  if (valueOpenQuote === -1) return null;
+
+  // Scan backwards from valueOpenQuote to find the colon
+  let colonPos = -1;
+  for (let i = valueOpenQuote - 1; i >= 0; i--) {
+    if (jsonString[i] === ':') {
+      colonPos = i;
+      break;
+    }
+  }
+  if (colonPos === -1) return null;
+
+  // Scan backwards from colonPos to find the key's closing quote
+  let keyCloseQuote = -1;
+  for (let i = colonPos - 1; i >= 0; i--) {
+    if (jsonString[i] === '"') {
+      let slashes = 0;
+      for (let j = i - 1; j >= 0 && jsonString[j] === '\\'; j--) slashes++;
+      if (slashes % 2 === 0) {
+        keyCloseQuote = i;
+        break;
+      }
+    }
+  }
+  if (keyCloseQuote === -1) return null;
+
+  // Scan backwards from keyCloseQuote to find the key's opening quote
+  let keyOpenQuote = -1;
+  for (let i = keyCloseQuote - 1; i >= 0; i--) {
+    if (jsonString[i] === '"') {
+      let slashes = 0;
+      for (let j = i - 1; j >= 0 && jsonString[j] === '\\'; j--) slashes++;
+      if (slashes % 2 === 0) {
+        keyOpenQuote = i;
+        break;
+      }
+    }
+  }
+  if (keyOpenQuote === -1) return null;
+
+  return jsonString.substring(keyOpenQuote + 1, keyCloseQuote);
+}
+
+
 const ImageCard: React.FC<ImageCardProps> = ({ image, parsedJsonData }) => {
   const [hasError, setHasError] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
@@ -34,7 +100,7 @@ const ImageCard: React.FC<ImageCardProps> = ({ image, parsedJsonData }) => {
 
   const handleViewDetails = () => {
     if (!parsedJsonData) return;
-    setDialogSearchTerm(""); 
+    setDialogSearchTerm("");
 
     const parentObj = getParentObject(parsedJsonData, image.jsonPath);
     if (parentObj) {
@@ -59,22 +125,40 @@ const ImageCard: React.FC<ImageCardProps> = ({ image, parsedJsonData }) => {
     if (!detailObject) return { highlightedJsonHtml: "No hay datos para mostrar.", matchCount: 0 };
 
     const jsonString = JSON.stringify(detailObject, null, 2);
-    const searchTerm = dialogSearchTerm.trim(); // Trim the search term
+    const searchTerm = dialogSearchTerm.trim();
 
-    if (!searchTerm) { // if search term is empty after trimming
+    if (!searchTerm) {
       return { highlightedJsonHtml: jsonString, matchCount: 0 };
     }
 
     const escapedSearchTerm = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = new RegExp(escapedSearchTerm, 'gi');
+    const searchRegex = new RegExp(escapedSearchTerm, 'gi');
     
-    let count = 0;
-    const highlighted = jsonString.replace(regex, (match) => {
-      count++;
+    let calculatedMatchCount = 0;
+    
+    const tempHighlightedHtml = jsonString.replace(searchRegex, (match, offset) => {
+      const keyOfMatch = findKeyForOffset(jsonString, offset);
+      if (keyOfMatch && DATA_URI_LIKE_KEYS_LOWERCASE.includes(keyOfMatch.toLowerCase())) {
+        return match; // Don't highlight if it's in a data URI value
+      }
+      // We will count actual highlights later by iterating again or by counting marks.
+      // For now, just return the mark for replacement.
       return `<mark class="bg-accent text-accent-foreground px-0.5 py-0 rounded">${match}</mark>`;
     });
+
+    // Recalculate count based on actual marks made
+    // This is more accurate if the search term could itself contain characters that look like part of a mark tag
+    // A simpler way is to count during the replace if we are sure the search term cannot create false positive marks
+    let currentMatch;
+    const globalSearchRegex = new RegExp(escapedSearchTerm, 'gi'); // Need a fresh regex for exec
+    while ((currentMatch = globalSearchRegex.exec(jsonString)) !== null) {
+        const keyOfMatch = findKeyForOffset(jsonString, currentMatch.index);
+        if (!(keyOfMatch && DATA_URI_LIKE_KEYS_LOWERCASE.includes(keyOfMatch.toLowerCase()))) {
+            calculatedMatchCount++;
+        }
+    }
     
-    return { highlightedJsonHtml: highlighted, matchCount: count };
+    return { highlightedJsonHtml: tempHighlightedHtml, matchCount: calculatedMatchCount };
   }, [detailObject, dialogSearchTerm]);
 
 
@@ -116,7 +200,7 @@ const ImageCard: React.FC<ImageCardProps> = ({ image, parsedJsonData }) => {
         }}
       />
     );
-  } else {
+  } else { // 'url' but not absolute, or some other unhandled case
     imageContent = (
       <img
         src="https://placehold.co/300x200.png?text=Ruta+Inválida"
@@ -126,6 +210,7 @@ const ImageCard: React.FC<ImageCardProps> = ({ image, parsedJsonData }) => {
       />
     );
   }
+
 
   return (
     <Card className="overflow-hidden shadow-md hover:shadow-lg transition-shadow duration-200">
@@ -159,7 +244,7 @@ const ImageCard: React.FC<ImageCardProps> = ({ image, parsedJsonData }) => {
               <div className="my-2 flex flex-col sm:flex-row sm:items-center gap-2">
                 <Input
                   type="search"
-                  placeholder="Buscar en detalles..."
+                  placeholder="Buscar en detalles (no en Data URIs)..."
                   value={dialogSearchTerm}
                   onChange={(e) => setDialogSearchTerm(e.target.value)}
                   className="h-9 text-sm"
@@ -184,3 +269,4 @@ const ImageCard: React.FC<ImageCardProps> = ({ image, parsedJsonData }) => {
 };
 
 export default ImageCard;
+
