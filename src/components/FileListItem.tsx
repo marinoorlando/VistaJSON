@@ -21,7 +21,7 @@ const FileListItem: React.FC<FileListItemProps> = ({ fileId, fileName, isSelecte
   return (
     <li
       className={cn(
-        "flex items-center p-3 pr-2 mb-2 rounded-md cursor-pointer transition-all duration-150 ease-in-out group", // Added group for hover states on button
+        "flex items-center p-3 pl-2 mb-2 rounded-md cursor-pointer transition-all duration-150 ease-in-out group", // Adjusted padding for button on left
         "hover:bg-secondary/80",
         isSelected ? "bg-accent text-accent-foreground shadow-sm" : "bg-card hover:shadow-md"
       )}
@@ -31,14 +31,11 @@ const FileListItem: React.FC<FileListItemProps> = ({ fileId, fileName, isSelecte
       onKeyDown={(e) => e.key === 'Enter' && onSelect()}
       aria-selected={isSelected}
     >
-      <FileText className="h-5 w-5 mr-3 shrink-0" />
-      <span className="truncate flex-grow">{fileName}</span>
-      {isSelected && <CheckCircle2 className="h-5 w-5 ml-2 text-primary-foreground shrink-0" />}
       <Button
         variant="ghost"
         size="icon"
         className={cn(
-          "ml-2 h-7 w-7 shrink-0 opacity-60 group-hover:opacity-100",
+          "mr-2 h-7 w-7 shrink-0 opacity-60 group-hover:opacity-100", // Added mr-2 for spacing
           isSelected ? "text-accent-foreground hover:bg-destructive/20 hover:text-destructive-foreground" : "text-muted-foreground hover:text-destructive hover:bg-destructive/10"
         )}
         onClick={handleRemoveClick}
@@ -47,6 +44,9 @@ const FileListItem: React.FC<FileListItemProps> = ({ fileId, fileName, isSelecte
       >
         <X className="h-4 w-4" />
       </Button>
+      <FileText className="h-5 w-5 mr-2 shrink-0" /> {/* Adjusted margin */}
+      <span className="truncate flex-grow">{fileName}</span>
+      {isSelected && <CheckCircle2 className="h-5 w-5 ml-2 text-primary-foreground shrink-0" />}
     </li>
   );
 };
