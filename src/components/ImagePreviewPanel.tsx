@@ -25,8 +25,8 @@ const ImagePreviewPanel: React.FC<ImagePreviewPanelProps> = ({ images, isLoading
           La detección incluye campos con nombres comunes (ej: image, url, path), rutas URL directas y Data URIs.
         </CardDescription>
       </CardHeader>
-      <CardContent className="flex-1 overflow-hidden p-0 min-h-0">
-        <ScrollArea className="h-full p-4">
+      <CardContent className="flex-1 overflow-hidden p-4 min-h-0"> {/* Se movió p-4 aquí */}
+        <ScrollArea className="h-full"> {/* Se quitó p-4 de aquí */}
           {isLoading ? (
             <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-2"></div>
