@@ -31,6 +31,7 @@ const EXPLICITLY_SKIPPED_IMAGE_KEYS = [
   "style", 
   "ratio",
   "imagequality",
+  "quality",
   "suggestedprompt" 
 ];
 
