@@ -9,7 +9,7 @@ import FileListPanel from '@/components/FileListPanel';
 import JsonViewer from '@/components/JsonViewer';
 import ImagePreviewPanel from '@/components/ImagePreviewPanel';
 import type { UploadedFile, FoundImage } from '@/types';
-import { findImagesInJson, getAllUniqueKeys, getParentObject, findKeyForOffset, LITERAL_DATA_URI_KEYWORDS } from '@/lib/json-utils';
+import { findImagesInJson, getAllUniqueKeys, getParentObject, LITERAL_DATA_URI_KEYWORDS } from '@/lib/json-utils';
 import { suggestImageFields } from '@/ai/flows/suggest-image-fields';
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from 'lucide-react';
@@ -156,7 +156,32 @@ export default function HomePage() {
 
       try {
         const foundImages = findImagesInJson(file.parsedContent, aiSuggestedFields);
-        setImageSuggestions(foundImages);
+        const augmentedImages = foundImages.map(img => {
+          const parentObject = getParentObject(file.parsedContent, img.jsonPath);
+          let searchableContext = null;
+          if (parentObject && typeof parentObject === 'object') {
+            const parts: string[] = [];
+            for (const key in parentObject) {
+              if (Object.prototype.hasOwnProperty.call(parentObject, key)) {
+                if (!LITERAL_DATA_URI_KEYWORDS.includes(key.toLowerCase())) {
+                  try {
+                    // Add key and its stringified value for searching
+                    parts.push(key); 
+                    parts.push(JSON.stringify(parentObject[key]));
+                  } catch (e) { /* ignore errors during stringification for search */ }
+                }
+              }
+            }
+            searchableContext = parts.join(' '); 
+          } else if (parentObject) { // Parent might be a primitive if image path is very shallow
+             try {
+                searchableContext = JSON.stringify(parentObject);
+             } catch(e) {/* ignore */}
+          }
+          return { ...img, searchableParentContext: searchableContext };
+        });
+        setImageSuggestions(augmentedImages);
+
       } catch (findError) {
         console.error("Error al buscar imágenes en el JSON (después de intentos de IA):", findError);
         toast({
@@ -165,7 +190,7 @@ export default function HomePage() {
           variant: "destructive",
         });
         const foundImages = findImagesInJson(file.parsedContent); 
-        setImageSuggestions(foundImages);
+        setImageSuggestions(foundImages.map(img => ({...img, searchableParentContext: null })));
       }
     } catch (overallError) {
       console.error("Error general en processFileContent:", overallError);
@@ -214,46 +239,22 @@ export default function HomePage() {
       const pathMatch = image.jsonPath.toLowerCase().includes(searchTermLower);
       if (pathMatch) return true;
   
-      let valueMatch = false;
-      if (image.type === 'url') { // Only search in the value if it's a URL string
-        valueMatch = image.value.toLowerCase().includes(searchTermLower);
+      // Only search in image.value if it's a URL (not a Data URI)
+      if (image.type === 'url') {
+        const valueMatch = image.value.toLowerCase().includes(searchTermLower);
         if (valueMatch) return true;
       }
-      // If image.type === 'dataUri', we explicitly DO NOT search in its value here.
-  
-      let parentObjectMatch = false;
-      if (parsedJsonData) {
-        const parentObject = getParentObject(parsedJsonData, image.jsonPath);
-        if (parentObject) {
-          try {
-            const parentObjectString = JSON.stringify(parentObject); // Keep original case for findKeyForOffset
-            const parentObjectStringLower = parentObjectString.toLowerCase();
-            
-            let currentIndex = 0;
-            while (currentIndex < parentObjectStringLower.length) {
-              const matchIndex = parentObjectStringLower.indexOf(searchTermLower, currentIndex);
-              if (matchIndex === -1) break; // No more matches
-
-              const keyOfMatch = findKeyForOffset(parentObjectString, matchIndex);
-              if (keyOfMatch && LITERAL_DATA_URI_KEYWORDS.includes(keyOfMatch.toLowerCase())) {
-                // This match is inside a data URI field value, ignore it for parentObjectMatch
-              } else {
-                // This match is NOT inside a data URI field value, so parentObjectMatch is true
-                parentObjectMatch = true;
-                break; 
-              }
-              currentIndex = matchIndex + searchTermLower.length; // Continue searching after the current match
-            }
-          } catch (e) {
-            console.error("Error processing parent object for search:", e);
-          }
+      
+      // Search in the pre-calculated searchableParentContext
+      if (image.searchableParentContext) {
+        if (image.searchableParentContext.toLowerCase().includes(searchTermLower)) {
+          return true;
         }
       }
-      if (parentObjectMatch) return true;
   
       return false; 
     });
-  }, [imageSuggestions, imageSearchTerm, parsedJsonData]);
+  }, [imageSuggestions, imageSearchTerm]);
 
   useEffect(() => {
     setStartingImageIndex(0);
@@ -319,3 +320,4 @@ export default function HomePage() {
     </div>
   );
 }
+

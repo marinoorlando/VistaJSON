@@ -9,4 +9,5 @@ export interface FoundImage {
   jsonPath: string; // e.g., "user.profile.avatarImage"
   value: string; // The URL or Data URI
   type: 'url' | 'dataUri';
+  searchableParentContext?: string | null; // Pre-calculated searchable string from parent, excluding data URI content
 }

@@ -2,7 +2,19 @@
 import type { FoundImage } from '@/types';
 
 // Keywords that strongly suggest the field's value *is* the image data (likely base64 or a full Data URI)
-export const LITERAL_DATA_URI_KEYWORDS = ["datauri", "base64", "imagedata", "embeddedimage", "inlineimage", "imagedatauri", "photodatauri"];
+export const LITERAL_DATA_URI_KEYWORDS = [
+  "datauri", 
+  "base64", 
+  "imagedata", 
+  "embeddedimage", 
+  "inlineimage", 
+  "imagedatauri", 
+  "photodatauri",
+  "imagefile",
+  "base64image",
+  "filedata",
+  "attachmentdata" // Another common one for embedded file data
+];
 // Keywords that suggest the field's value is a path or URL to an image
 const GENERIC_IMAGE_URL_KEYWORDS = ["image", "url", "path", "uri", "foto", "img", "icon", "avatar", "thumbnail", "picture"];
 
@@ -46,7 +58,7 @@ export function findImagesInJson(jsonData: any, suggestedFields: string[] = []):
         let potentialImageUrl = value; 
         const lowerKey = key.toLowerCase();
 
-        DATA_URI_REGEX.lastIndex = 0;
+        DATA_URI_REGEX.lastIndex = 0; 
         const dataUriMatch = DATA_URI_REGEX.exec(potentialImageUrl);
         
         if (dataUriMatch && dataUriMatch[0]) {
@@ -54,7 +66,7 @@ export function findImagesInJson(jsonData: any, suggestedFields: string[] = []):
           potentialImageUrl = dataUriMatch[0].trim();
         } else if (LITERAL_DATA_URI_KEYWORDS.some(k => lowerKey.includes(k))) {
           imageType = 'dataUri';
-          potentialImageUrl = potentialImageUrl.trim(); // Trim even if not a full regex match
+          potentialImageUrl = potentialImageUrl.trim();
         } else if (potentialImageUrl.trim().startsWith('http://') || potentialImageUrl.trim().startsWith('https://')) {
           imageType = 'url';
           potentialImageUrl = potentialImageUrl.trim();
@@ -89,7 +101,7 @@ export function getParentObject(jsonData: any, imagePath: string): any | null {
   const pathSegments = normalizedPath.split('.');
 
   if (pathSegments.length <= 1) {
-    return jsonData;
+    return jsonData; // Image is at the root, parent is the root object itself
   }
 
   let currentObject = jsonData;
@@ -111,10 +123,9 @@ export function findKeyForOffset(jsonString: string, offset: number): string | n
     if (jsonString[i] === '"') {
       let slashes = 0;
       for (let j = i - 1; j >= 0 && jsonString[j] === '\\'; j--) slashes++;
-      if (slashes % 2 === 0) { // Not an escaped quote
-        // Check if this quote is preceded by a colon (it's an opening quote of a value)
+      if (slashes % 2 === 0) { 
         let k = i - 1;
-        while (k >= 0 && (jsonString[k] === ' ' || jsonString[k] === '\n' || jsonString[k] === '\r' || jsonString[k] === '\t')) k--; // skip whitespace
+        while (k >= 0 && (jsonString[k] === ' ' || jsonString[k] === '\n' || jsonString[k] === '\r' || jsonString[k] === '\t')) k--; 
         if (k >= 0 && jsonString[k] === ':') {
           valueOpenQuote = i;
           break;
@@ -124,7 +135,6 @@ export function findKeyForOffset(jsonString: string, offset: number): string | n
   }
   if (valueOpenQuote === -1) return null;
 
-  // Scan backwards from valueOpenQuote to find the colon
   let colonPos = -1;
   for (let i = valueOpenQuote - 1; i >= 0; i--) {
     if (jsonString[i] === ':') {
@@ -134,7 +144,6 @@ export function findKeyForOffset(jsonString: string, offset: number): string | n
   }
   if (colonPos === -1) return null;
 
-  // Scan backwards from colonPos to find the key's closing quote
   let keyCloseQuote = -1;
   for (let i = colonPos - 1; i >= 0; i--) {
     if (jsonString[i] === '"') {
@@ -148,7 +157,6 @@ export function findKeyForOffset(jsonString: string, offset: number): string | n
   }
   if (keyCloseQuote === -1) return null;
 
-  // Scan backwards from keyCloseQuote to find the key's opening quote
   let keyOpenQuote = -1;
   for (let i = keyCloseQuote - 1; i >= 0; i--) {
     if (jsonString[i] === '"') {
