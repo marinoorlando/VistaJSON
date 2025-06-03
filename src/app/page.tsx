@@ -26,6 +26,7 @@ export default function HomePage() {
 
   const [imagesToShow, setImagesToShow] = useState<number>(12);
   const [imageGridColumns, setImageGridColumns] = useState<number>(3);
+  const [startingImageIndex, setStartingImageIndex] = useState<number>(0); // 0-based
 
   const selectedFile = uploadedFiles.find(f => f.id === selectedFileId) || null;
 
@@ -67,6 +68,7 @@ export default function HomePage() {
       setSelectedFileId(null);
       setParsedJsonData(null);
       setImageSuggestions([]);
+      setStartingImageIndex(0);
     }
     const removedFile = uploadedFiles.find(f => f.id === fileIdToRemove);
     toast({
@@ -79,12 +81,14 @@ export default function HomePage() {
     if (!file) {
       setParsedJsonData(null);
       setImageSuggestions([]);
+      setStartingImageIndex(0);
       return;
     }
 
     setIsLoadingJson(true);
     setParsedJsonData(file.parsedContent);
     setIsLoadingJson(false);
+    setStartingImageIndex(0); // Reset starting index for new file content
 
     setIsLoadingSuggestions(true); // Covers AI + local finding
     try {
@@ -101,7 +105,7 @@ export default function HomePage() {
           console.error(`Error en suggestImageFields (intento ${attempt + 1}/${MAX_RETRIES + 1}):`, error);
           const errorMessage = error.message ? String(error.message).toLowerCase() : "";
           const errorString = error.toString ? String(error.toString()).toLowerCase() : "";
-          const isQuotaError = errorMessage.includes("429") || errorString.includes("429") || errorMessage.includes("quota") || errorString.includes("quota") || errorString.includes("exceeded");
+          const isQuotaError = errorMessage.includes("429") || errorString.includes("429") || errorMessage.includes("quota") || errorString.includes("quota") || errorMessage.includes("rate limit") || errorString.includes("rate limit") ;
           
           if (isQuotaError && attempt < MAX_RETRIES) {
             attempt++; 
@@ -169,20 +173,24 @@ export default function HomePage() {
     if (selectedFileId && uploadedFiles.length > 0) {
         const currentSelectedFile = uploadedFiles.find(f => f.id === selectedFileId);
         if (currentSelectedFile) {
-            processFileContent(currentSelectedFile);
+            if (currentSelectedFile.parsedContent !== parsedJsonData) { // Process only if content is different or not yet processed
+              processFileContent(currentSelectedFile);
+            }
         } else {
-          setSelectedFileId(null);
+          setSelectedFileId(null); // File was removed or ID is invalid
           setParsedJsonData(null);
           setImageSuggestions([]);
+          setStartingImageIndex(0);
         }
     } else if (!selectedFileId) {
         setParsedJsonData(null);
         setImageSuggestions([]);
         setIsLoadingJson(false);
         setIsLoadingSuggestions(false);
+        setStartingImageIndex(0);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedFileId, processFileContent, uploadedFiles]); 
+  }, [selectedFileId, processFileContent, uploadedFiles]); // Removed parsedJsonData from deps to avoid re-processing on simple state set
 
   const handleToggleJsonContent = () => {
     setShowJsonContent(prev => !prev);
@@ -216,6 +224,8 @@ export default function HomePage() {
                 setImagesToShow={setImagesToShow}
                 imageGridColumns={imageGridColumns}
                 setImageGridColumns={setImageGridColumns}
+                startingImageIndex={startingImageIndex}
+                setStartingImageIndex={setStartingImageIndex}
               />
             </div>
             <div className="flex-1 min-h-[300px] md:min-h-0 md:h-1/2">
@@ -238,3 +248,5 @@ export default function HomePage() {
     </div>
   );
 }
+
+    

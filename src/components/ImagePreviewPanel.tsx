@@ -17,6 +17,8 @@ interface ImagePreviewPanelProps {
   setImagesToShow: (count: number) => void;
   imageGridColumns: number;
   setImageGridColumns: (cols: number) => void;
+  startingImageIndex: number; // 0-based
+  setStartingImageIndex: (index: number) => void; // 0-based
 }
 
 const getGridColsClass = (cols: number): string => {
@@ -27,7 +29,7 @@ const getGridColsClass = (cols: number): string => {
     case 4: return "grid-cols-4";
     case 5: return "grid-cols-5";
     case 6: return "grid-cols-6";
-    default: return "grid-cols-3"; // Default a 3 si el número no está en la lista
+    default: return "grid-cols-3"; 
   }
 };
 
@@ -38,8 +40,26 @@ const ImagePreviewPanel: React.FC<ImagePreviewPanelProps> = ({
   imagesToShow,
   setImagesToShow,
   imageGridColumns,
-  setImageGridColumns
+  setImageGridColumns,
+  startingImageIndex,
+  setStartingImageIndex
 }) => {
+
+  const handleStartingImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let val = parseInt(e.target.value, 10);
+    if (isNaN(val) || val < 1) {
+      val = 1; // Min value is 1 for display
+    }
+    if (images.length > 0 && val > images.length) {
+      val = images.length;
+    } else if (images.length === 0 && val > 1) {
+      val = 1;
+    }
+    setStartingImageIndex(val - 1); // Convert 1-based input to 0-based state
+  };
+
+  const displayedImages = images.slice(startingImageIndex, startingImageIndex + imagesToShow);
+
   return (
     <Card className="flex-1 flex flex-col min-h-0 shadow-lg">
       <CardHeader>
@@ -49,10 +69,25 @@ const ImagePreviewPanel: React.FC<ImagePreviewPanelProps> = ({
         </CardTitle>
         <CardDescription className="text-xs">
           Este panel muestra imágenes detectadas automáticamente en el archivo JSON. 
+          {images.length > 0 && ` Mostrando ${displayedImages.length} de ${images.length} imágenes totales.`}
         </CardDescription>
         <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mt-2 pt-2 border-t border-border items-start sm:items-center">
           <div className="flex items-center space-x-2">
-            <Label htmlFor="images-to-show" className="text-sm shrink-0">Mostrar:</Label>
+            <Label htmlFor="starting-image-index" className="text-sm shrink-0">Empezar desde Img Nº:</Label>
+            <Input
+              id="starting-image-index"
+              type="number"
+              min="1"
+              max={images.length > 0 ? images.length : 1}
+              value={images.length === 0 ? 0 : startingImageIndex + 1} // Display 1-based
+              onChange={handleStartingImageChange}
+              className="w-24 h-9 text-sm"
+              placeholder="Nº"
+              disabled={images.length === 0}
+            />
+          </div>
+          <div className="flex items-center space-x-2">
+            <Label htmlFor="images-to-show" className="text-sm shrink-0">Mostrar Cant.:</Label>
             <Input
               id="images-to-show"
               type="number"
@@ -63,11 +98,12 @@ const ImagePreviewPanel: React.FC<ImagePreviewPanelProps> = ({
                 if (!isNaN(val) && val > 0) {
                   setImagesToShow(val);
                 } else if (e.target.value === "") {
-                  setImagesToShow(1); // O un default si se borra
+                  setImagesToShow(1); 
                 }
               }}
               className="w-20 h-9 text-sm"
               placeholder="Cant."
+              disabled={images.length === 0}
             />
           </div>
           <div className="flex items-center space-x-2">
@@ -75,6 +111,7 @@ const ImagePreviewPanel: React.FC<ImagePreviewPanelProps> = ({
             <Select
               value={imageGridColumns.toString()}
               onValueChange={(value) => setImageGridColumns(parseInt(value, 10))}
+              disabled={images.length === 0}
             >
               <SelectTrigger id="grid-columns" className="w-20 h-9 text-sm">
                 <SelectValue placeholder="Cols" />
@@ -100,16 +137,16 @@ const ImagePreviewPanel: React.FC<ImagePreviewPanelProps> = ({
                 <SearchSlash className="h-12 w-12 mb-2" />
                 <p>Seleccione un archivo JSON para ver las imágenes.</p>
             </div>
-          ) : images.length > 0 ? (
+          ) : displayedImages.length > 0 ? (
             <div className={`grid ${getGridColsClass(imageGridColumns)} gap-4`}>
-              {images.slice(0, imagesToShow).map((img, index) => (
-                <ImageCard key={`${img.jsonPath}-${index}`} image={img} />
+              {displayedImages.map((img, index) => (
+                <ImageCard key={`${img.jsonPath}-${startingImageIndex + index}`} image={img} />
               ))}
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
               <SearchSlash className="h-12 w-12 mb-2" />
-              <p>No se encontraron imágenes en el archivo seleccionado.</p>
+              <p>{images.length > 0 && startingImageIndex >= images.length ? 'El índice inicial es demasiado alto.' : 'No se encontraron imágenes en el archivo seleccionado o para el rango especificado.'}</p>
             </div>
           )}
         </ScrollArea>
@@ -119,3 +156,5 @@ const ImagePreviewPanel: React.FC<ImagePreviewPanelProps> = ({
 };
 
 export default ImagePreviewPanel;
+
+    
