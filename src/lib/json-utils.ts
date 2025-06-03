@@ -21,12 +21,16 @@ const GENERIC_IMAGE_URL_KEYWORDS = ["image", "url", "path", "uri", "foto", "img"
 // Regex to match standard Data URIs for images, permissive for MIME types
 const DATA_URI_REGEX = /data:image\/[a-zA-Z0-9.+*-]+;base64,([A-Za-z0-9+/=]+)/gi;
 
-// Claves que, aunque relacionadas con archivos, probablemente no son la imagen visualizable en sí.
+// Claves que, aunque relacionadas con archivos o metadatos, probablemente no son la imagen visualizable en sí.
 const EXPLICITLY_SKIPPED_IMAGE_KEYS = [
   "originalfilename",
   "original_filename",
   "originalfilename", 
-  "filename" // Si la clave es *exactamente* "filename"
+  "filename", // Si la clave es *exactamente* "filename"
+  "artisticstyle",
+  "aspectratio",
+  "style", // "style" es muy genérico y puede causar falsos positivos
+  "ratio"  // "ratio" es muy genérico y puede causar falsos positivos
 ];
 
 
@@ -195,3 +199,4 @@ export function findKeyForOffset(jsonString: string, offset: number): string | n
 
   return jsonString.substring(keyOpenQuote + 1, keyCloseQuote);
 }
+
