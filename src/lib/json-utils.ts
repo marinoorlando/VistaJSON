@@ -25,12 +25,12 @@ const DATA_URI_REGEX = /data:image\/[a-zA-Z0-9.+*-]+;base64,([A-Za-z0-9+/=]+)/gi
 const EXPLICITLY_SKIPPED_IMAGE_KEYS = [
   "originalfilename",
   "original_filename",
-  "originalfilename", 
-  "filename", // Si la clave es *exactamente* "filename"
+  "filename", 
   "artisticstyle",
   "aspectratio",
-  "style", // "style" es muy genérico y puede causar falsos positivos
-  "ratio"  // "ratio" es muy genérico y puede causar falsos positivos
+  "style", 
+  "ratio",
+  "imagequality" 
 ];
 
 
