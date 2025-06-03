@@ -1,3 +1,4 @@
+
 'use client';
 
 import type React from 'react';
@@ -68,32 +69,62 @@ export default function HomePage() {
     setParsedJsonData(file.parsedContent);
     setIsLoadingJson(false);
 
+    let aiSuggestedFields: string[] = [];
     try {
       // Call AI to suggest image fields
       const aiSuggestionsOutput = await suggestImageFields({ jsonContent: file.content });
-      const aiSuggestedFields = aiSuggestionsOutput.imageFields || [];
-      
-      // Find images using parsed content and AI suggestions
+      aiSuggestedFields = aiSuggestionsOutput.imageFields || [];
+    } catch (error: any) {
+      console.error("Error al obtener sugerencias de imágenes de la IA:", error);
+      if (error.message && error.message.includes("429")) {
+        toast({
+          title: "Límite de Tasa Alcanzado",
+          description: "Se ha excedido el límite de solicitudes a la IA. Se utilizará la detección básica de imágenes. Por favor, inténtelo más tarde o revise su plan de API.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Error de IA",
+          description: "Ocurrió un error al comunicarse con el servicio de IA para sugerencias de imágenes.",
+          variant: "destructive",
+        });
+      }
+    }
+
+    try {
+      // Find images using parsed content and AI suggestions (which might be empty if AI failed)
       const foundImages = findImagesInJson(file.parsedContent, aiSuggestedFields);
       setImageSuggestions(foundImages);
     } catch (error) {
-      console.error("Error al obtener sugerencias de imágenes o al buscarlas:", error);
-      toast({
-        title: "Error de Detección",
-        description: "Ocurrió un error al intentar detectar imágenes en el JSON.",
-        variant: "destructive",
-      });
-      // Fallback to finding images without AI suggestions if AI fails
-      const foundImages = findImagesInJson(file.parsedContent);
-      setImageSuggestions(foundImages);
-    } finally {
+        console.error("Error al buscar imágenes en el JSON:", error);
+        toast({
+          title: "Error de Detección",
+          description: "Ocurrió un error al intentar detectar imágenes en el JSON.",
+          variant: "destructive",
+        });
+        // Fallback to finding images without AI suggestions if a general error occurs here
+        const foundImages = findImagesInJson(file.parsedContent);
+        setImageSuggestions(foundImages);
+    }
+    finally {
       setIsLoadingSuggestions(false);
     }
   }, [toast]);
 
   useEffect(() => {
-    processFileContent(selectedFile);
-  }, [selectedFileId, uploadedFiles, processFileContent, selectedFile]);
+    if (selectedFileId && uploadedFiles.length > 0) {
+        const currentSelectedFile = uploadedFiles.find(f => f.id === selectedFileId);
+        if (currentSelectedFile) {
+            processFileContent(currentSelectedFile);
+        }
+    } else if (!selectedFileId) {
+        setParsedJsonData(null);
+        setImageSuggestions([]);
+        setIsLoadingJson(false);
+        setIsLoadingSuggestions(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedFileId, processFileContent]); // uploadedFiles is removed to prevent re-processing on every file list change unless selectedFileId changes. processFileContent is stable.
 
 
   return (
@@ -136,3 +167,4 @@ export default function HomePage() {
     </div>
   );
 }
+
