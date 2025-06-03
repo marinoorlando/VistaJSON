@@ -1,6 +1,8 @@
+
 import type { FoundImage } from '@/types';
 
 const IMAGE_KEYWORDS = ["image", "url", "path", "uri", "foto", "img"];
+const DATA_URI_REGEX = /data:image\/(?:png|jpeg|jpg|gif|webp|svg\+xml);base64,([A-Za-z0-9+/]+={0,2})/gi;
 
 // Helper function to extract all unique keys from a JSON object
 export function getAllUniqueKeys(data: any): string[] {
@@ -37,16 +39,24 @@ export function findImagesInJson(jsonData: any, suggestedFields: string[] = []):
         let imageType: FoundImage['type'] | null = null;
         let potentialImageUrl = value;
 
-        if (value.startsWith('data:image/')) {
+        // 1. Check for Data URIs within the string using regex
+        DATA_URI_REGEX.lastIndex = 0; // Reset regex state for global flag
+        const dataUriMatch = DATA_URI_REGEX.exec(value);
+        if (dataUriMatch) {
           imageType = 'dataUri';
-        } else if (value.startsWith('http://') || value.startsWith('https://')) {
+          potentialImageUrl = dataUriMatch[0]; // The full Data URI matched
+        } 
+        // 2. Else, check for absolute URLs
+        else if (value.startsWith('http://') || value.startsWith('https://')) {
           imageType = 'url';
-        } else {
+          // potentialImageUrl is already value
+        } 
+        // 3. Else, rely on key name hints for potential relative paths or other URLs
+        else {
           const lowerKey = key.toLowerCase();
-          // Check if it's a field suggested by AI (which are just key names)
-          // or matches general keywords.
           if (suggestedFields.includes(key) || IMAGE_KEYWORDS.some(k => lowerKey.includes(k))) {
              imageType = 'url'; // Assume it's a relative or resolvable URL
+             // potentialImageUrl is already value
           }
         }
         
