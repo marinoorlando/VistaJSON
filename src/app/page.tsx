@@ -158,17 +158,24 @@ export default function HomePage() {
         const foundImages = findImagesInJson(file.parsedContent, aiSuggestedFields);
         const augmentedImages = foundImages.map(img => {
           const parentObject = getParentObject(file.parsedContent, img.jsonPath);
-          let searchableContext = null;
+          let searchableContext: string | null = null;
+          
           if (parentObject && typeof parentObject === 'object') {
             const parts: string[] = [];
             for (const key in parentObject) {
               if (Object.prototype.hasOwnProperty.call(parentObject, key)) {
-                if (!LITERAL_DATA_URI_KEYWORDS.includes(key.toLowerCase())) {
-                  try {
-                    // Add key and its stringified value for searching
-                    parts.push(key); 
-                    parts.push(JSON.stringify(parentObject[key]));
-                  } catch (e) { /* ignore errors during stringification for search */ }
+                parts.push(key); // Always include the key name in the searchable context
+                const value = parentObject[key];
+                const lowerKey = key.toLowerCase();
+
+                // Only include the value if it's a string/number/boolean AND its key is NOT a literal data URI key
+                if (!LITERAL_DATA_URI_KEYWORDS.includes(lowerKey)) {
+                    if (typeof value === 'string') {
+                        parts.push(value);
+                    } else if (typeof value === 'number' || typeof value === 'boolean') {
+                        parts.push(String(value));
+                    }
+                    // Intentionally DO NOT process/stringify nested objects or arrays here for performance.
                 }
               }
             }
