@@ -2,7 +2,9 @@
 import type { FoundImage } from '@/types';
 
 const IMAGE_KEYWORDS = ["image", "url", "path", "uri", "foto", "img"];
-const DATA_URI_REGEX = /data:image\/(?:png|jpeg|jpg|gif|webp|svg\+xml);base64,([A-Za-z0-9+/]+={0,2})/gi;
+// Regex to match standard Data URIs for images, now more permissive for MIME types
+// Allows any characters for image subtype, e.g. image/bmp, image/tiff, etc.
+const DATA_URI_REGEX = /data:image\/[a-zA-Z0-9.+*-]+;base64,([A-Za-z0-9+/]+={0,2})/gi;
 
 // Helper function to extract all unique keys from a JSON object
 export function getAllUniqueKeys(data: any): string[] {
@@ -37,26 +39,26 @@ export function findImagesInJson(jsonData: any, suggestedFields: string[] = []):
       const newPath = currentPath ? `${currentPath}.${key}` : key;
       if (typeof value === 'string') {
         let imageType: FoundImage['type'] | null = null;
-        let potentialImageUrl = value;
+        let potentialImageUrl = value.trim(); 
 
         // 1. Check for Data URIs within the string using regex
         DATA_URI_REGEX.lastIndex = 0; // Reset regex state for global flag
-        const dataUriMatch = DATA_URI_REGEX.exec(value);
+        const dataUriMatch = DATA_URI_REGEX.exec(potentialImageUrl);
         if (dataUriMatch && dataUriMatch[0]) {
           imageType = 'dataUri';
-          potentialImageUrl = dataUriMatch[0].trim(); // Trim whitespace
+          potentialImageUrl = dataUriMatch[0]; // Use the full matched Data URI
         } 
         // 2. Else, check for absolute URLs
-        else if (value.startsWith('http://') || value.startsWith('https://')) {
+        else if (potentialImageUrl.startsWith('http://') || potentialImageUrl.startsWith('https://')) {
           imageType = 'url';
-          // potentialImageUrl is already value
+          // potentialImageUrl is already the trimmed value
         } 
         // 3. Else, rely on key name hints for potential relative paths or other URLs
         else {
           const lowerKey = key.toLowerCase();
           if (suggestedFields.includes(key) || IMAGE_KEYWORDS.some(k => lowerKey.includes(k))) {
              imageType = 'url'; // Assume it's a relative or resolvable URL
-             // potentialImageUrl is already value
+             // potentialImageUrl is already the trimmed value
           }
         }
         
