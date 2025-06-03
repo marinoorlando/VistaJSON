@@ -21,7 +21,7 @@ export default function HomePage() {
   const [imageSuggestions, setImageSuggestions] = useState<FoundImage[]>([]);
   const [isLoadingJson, setIsLoadingJson] = useState(false);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
-  const [showJsonContent, setShowJsonContent] = useState(true);
+  const [showJsonContent, setShowJsonContent] = useState(false);
   const { toast } = useToast();
 
   const selectedFile = uploadedFiles.find(f => f.id === selectedFileId) || null;
