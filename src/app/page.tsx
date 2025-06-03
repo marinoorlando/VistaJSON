@@ -231,6 +231,7 @@ export default function HomePage() {
             <div className="flex-1 min-h-[300px] md:min-h-0 md:h-1/2">
               <ImagePreviewPanel 
                 images={imageSuggestions} 
+                parsedJsonData={parsedJsonData}
                 isLoading={isLoadingSuggestions && !selectedFileId} // Only show image panel loading if no file selected
                 jsonSelected={!!selectedFileId}
                 imagesToShow={imagesToShow}

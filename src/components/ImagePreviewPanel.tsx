@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 
 interface ImagePreviewPanelProps {
   images: FoundImage[];
+  parsedJsonData: any | null; // To pass to ImageCard for details modal
   isLoading: boolean;
   jsonSelected: boolean;
   imagesToShow: number;
@@ -35,6 +36,7 @@ const getGridColsClass = (cols: number): string => {
 
 const ImagePreviewPanel: React.FC<ImagePreviewPanelProps> = ({ 
   images, 
+  parsedJsonData,
   isLoading, 
   jsonSelected,
   imagesToShow,
@@ -125,7 +127,7 @@ const ImagePreviewPanel: React.FC<ImagePreviewPanelProps> = ({
           </div>
         </div>
       </CardHeader>
-      <CardContent className="flex-1 overflow-hidden p-4 min-h-0">
+      <CardContent className="flex-1 overflow-hidden min-h-0 p-4"> 
         <ScrollArea className="h-full">
           {isLoading ? (
             <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
@@ -140,7 +142,11 @@ const ImagePreviewPanel: React.FC<ImagePreviewPanelProps> = ({
           ) : displayedImages.length > 0 ? (
             <div className={`grid ${getGridColsClass(imageGridColumns)} gap-4`}>
               {displayedImages.map((img, index) => (
-                <ImageCard key={`${img.jsonPath}-${startingImageIndex + index}`} image={img} />
+                <ImageCard 
+                  key={`${img.jsonPath}-${startingImageIndex + index}`} 
+                  image={img} 
+                  parsedJsonData={parsedJsonData}
+                />
               ))}
             </div>
           ) : (
@@ -156,5 +162,3 @@ const ImagePreviewPanel: React.FC<ImagePreviewPanelProps> = ({
 };
 
 export default ImagePreviewPanel;
-
-    
