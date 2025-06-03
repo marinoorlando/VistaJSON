@@ -4,22 +4,25 @@ import type { FoundImage } from '@/types';
 import ImageCard from './ImageCard';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ImageIcon, SearchSlash } from 'lucide-react';
+import { ImageIcon, SearchSlash, SearchX } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
 
 interface ImagePreviewPanelProps {
   images: FoundImage[];
-  parsedJsonData: any | null; // To pass to ImageCard for details modal
+  parsedJsonData: any | null;
   isLoading: boolean;
   jsonSelected: boolean;
   imagesToShow: number;
   setImagesToShow: (count: number) => void;
   imageGridColumns: number;
   setImageGridColumns: (cols: number) => void;
-  startingImageIndex: number; // 0-based
-  setStartingImageIndex: (index: number) => void; // 0-based
+  startingImageIndex: number; 
+  setStartingImageIndex: (index: number) => void; 
+  imageSearchTerm: string;
+  setImageSearchTerm: (term: string) => void;
 }
 
 const getGridColsClass = (cols: number): string => {
@@ -44,23 +47,33 @@ const ImagePreviewPanel: React.FC<ImagePreviewPanelProps> = ({
   imageGridColumns,
   setImageGridColumns,
   startingImageIndex,
-  setStartingImageIndex
+  setStartingImageIndex,
+  imageSearchTerm,
+  setImageSearchTerm
 }) => {
 
   const handleStartingImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let val = parseInt(e.target.value, 10);
     if (isNaN(val) || val < 1) {
-      val = 1; // Min value is 1 for display
+      val = 1; 
     }
     if (images.length > 0 && val > images.length) {
       val = images.length;
     } else if (images.length === 0 && val > 1) {
       val = 1;
     }
-    setStartingImageIndex(val - 1); // Convert 1-based input to 0-based state
+    setStartingImageIndex(val - 1); 
   };
 
   const displayedImages = images.slice(startingImageIndex, startingImageIndex + imagesToShow);
+
+  let noImagesMessage = 'No se encontraron imágenes en el archivo seleccionado.';
+  if (jsonSelected && images.length === 0 && imageSearchTerm && imageSearchTerm.trim() !== "") {
+    noImagesMessage = 'No se encontraron imágenes que coincidan con su búsqueda.';
+  } else if (jsonSelected && images.length > 0 && displayedImages.length === 0) {
+     noImagesMessage = 'Ajuste "Empezar desde Img Nº" o "Mostrar Cant." para ver las imágenes filtradas.';
+  }
+
 
   return (
     <Card className="flex-1 flex flex-col min-h-0 shadow-lg">
@@ -70,26 +83,51 @@ const ImagePreviewPanel: React.FC<ImagePreviewPanelProps> = ({
           Previsualización de Imágenes
         </CardTitle>
         <CardDescription className="text-xs">
-          Este panel muestra imágenes detectadas automáticamente en el archivo JSON. 
-          {images.length > 0 && ` Mostrando ${displayedImages.length} de ${images.length} imágenes totales.`}
+          {jsonSelected 
+            ? `Mostrando ${displayedImages.length} de ${images.length} imágenes ${imageSearchTerm ? 'filtradas' : 'totales'}.`
+            : "Seleccione un archivo para ver las imágenes."}
         </CardDescription>
-        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 mt-2 pt-2 border-t border-border items-start sm:items-center">
-          <div className="flex items-center space-x-2">
-            <Label htmlFor="starting-image-index" className="text-sm shrink-0">Empezar desde Img Nº:</Label>
+        
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-2 pt-2 border-t border-border items-end">
+          <div className="flex flex-col space-y-1">
+            <Label htmlFor="image-search-term" className="text-sm">Buscar en datos de imagen:</Label>
+            <div className="flex">
+              <Input
+                id="image-search-term"
+                type="search"
+                placeholder="Ej: paisaje, user.name..."
+                value={imageSearchTerm}
+                onChange={(e) => setImageSearchTerm(e.target.value)}
+                className="h-9 text-sm rounded-r-none"
+                disabled={!jsonSelected}
+              />
+              <Button 
+                variant="outline" 
+                size="icon" 
+                className="h-9 w-9 rounded-l-none border-l-0" 
+                onClick={() => setImageSearchTerm('')}
+                disabled={!imageSearchTerm}
+                title="Limpiar búsqueda"
+              >
+                <SearchX className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+          <div className="flex flex-col space-y-1">
+            <Label htmlFor="starting-image-index" className="text-sm">Empezar desde Img Nº:</Label>
             <Input
               id="starting-image-index"
               type="number"
               min="1"
               max={images.length > 0 ? images.length : 1}
-              value={images.length === 0 ? 0 : startingImageIndex + 1} // Display 1-based
+              value={images.length === 0 ? (startingImageIndex === 0 ? 0 : 1) : startingImageIndex + 1}
               onChange={handleStartingImageChange}
-              className="w-24 h-9 text-sm"
-              placeholder="Nº"
-              disabled={images.length === 0}
+              className="w-full h-9 text-sm"
+              disabled={images.length === 0 && !imageSearchTerm}
             />
           </div>
-          <div className="flex items-center space-x-2">
-            <Label htmlFor="images-to-show" className="text-sm shrink-0">Mostrar Cant.:</Label>
+          <div className="flex flex-col space-y-1">
+            <Label htmlFor="images-to-show" className="text-sm">Mostrar Cant.:</Label>
             <Input
               id="images-to-show"
               type="number"
@@ -103,19 +141,18 @@ const ImagePreviewPanel: React.FC<ImagePreviewPanelProps> = ({
                   setImagesToShow(1); 
                 }
               }}
-              className="w-20 h-9 text-sm"
-              placeholder="Cant."
-              disabled={images.length === 0}
+              className="w-full h-9 text-sm"
+              disabled={images.length === 0 && !imageSearchTerm}
             />
           </div>
-          <div className="flex items-center space-x-2">
-            <Label htmlFor="grid-columns" className="text-sm shrink-0">Columnas:</Label>
+          <div className="flex flex-col space-y-1 sm:col-span-2 lg:col-span-1"> {/* Adjust span for layout */}
+            <Label htmlFor="grid-columns" className="text-sm">Columnas:</Label>
             <Select
               value={imageGridColumns.toString()}
               onValueChange={(value) => setImageGridColumns(parseInt(value, 10))}
-              disabled={images.length === 0}
+              disabled={images.length === 0 && !imageSearchTerm}
             >
-              <SelectTrigger id="grid-columns" className="w-20 h-9 text-sm">
+              <SelectTrigger id="grid-columns" className="w-full h-9 text-sm">
                 <SelectValue placeholder="Cols" />
               </SelectTrigger>
               <SelectContent>
@@ -143,7 +180,7 @@ const ImagePreviewPanel: React.FC<ImagePreviewPanelProps> = ({
             <div className={`grid ${getGridColsClass(imageGridColumns)} gap-4`}>
               {displayedImages.map((img, index) => (
                 <ImageCard 
-                  key={`${img.jsonPath}-${startingImageIndex + index}`} 
+                  key={`${img.jsonPath}-${startingImageIndex + index}-${imageSearchTerm}`} 
                   image={img} 
                   parsedJsonData={parsedJsonData}
                 />
@@ -152,7 +189,7 @@ const ImagePreviewPanel: React.FC<ImagePreviewPanelProps> = ({
           ) : (
             <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
               <SearchSlash className="h-12 w-12 mb-2" />
-              <p>{images.length > 0 && startingImageIndex >= images.length ? 'El índice inicial es demasiado alto.' : 'No se encontraron imágenes en el archivo seleccionado o para el rango especificado.'}</p>
+              <p>{noImagesMessage}</p>
             </div>
           )}
         </ScrollArea>

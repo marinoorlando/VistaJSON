@@ -2,14 +2,14 @@
 'use client';
 
 import type React from 'react';
-import { useState, useEffect, useCallback }
+import { useState, useEffect, useCallback, useMemo }
 from 'react';
 import AppHeader from '@/components/AppHeader';
 import FileListPanel from '@/components/FileListPanel';
 import JsonViewer from '@/components/JsonViewer';
 import ImagePreviewPanel from '@/components/ImagePreviewPanel';
 import type { UploadedFile, FoundImage } from '@/types';
-import { findImagesInJson, getAllUniqueKeys } from '@/lib/json-utils';
+import { findImagesInJson, getAllUniqueKeys, getParentObject } from '@/lib/json-utils';
 import { suggestImageFields } from '@/ai/flows/suggest-image-fields';
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from 'lucide-react';
@@ -27,6 +27,7 @@ export default function HomePage() {
   const [imagesToShow, setImagesToShow] = useState<number>(2);
   const [imageGridColumns, setImageGridColumns] = useState<number>(2);
   const [startingImageIndex, setStartingImageIndex] = useState<number>(0); // 0-based
+  const [imageSearchTerm, setImageSearchTerm] = useState<string>('');
 
   const selectedFile = uploadedFiles.find(f => f.id === selectedFileId) || null;
 
@@ -34,14 +35,14 @@ export default function HomePage() {
     const files = event.target.files;
     if (!files) return;
 
-    setIsLoadingJson(true); // Indicate loading during file processing
+    setIsLoadingJson(true);
     const newUploadedFiles: UploadedFile[] = [];
     for (const file of Array.from(files)) {
       try {
         const content = await file.text();
-        const parsedContent = JSON.parse(content); // This can be slow for huge files
+        const parsedContent = JSON.parse(content);
         newUploadedFiles.push({
-          id: `${file.name}-${Date.now()}`, // Simple unique ID
+          id: `${file.name}-${Date.now()}`,
           name: file.name,
           content,
           parsedContent,
@@ -60,8 +61,8 @@ export default function HomePage() {
     if (newUploadedFiles.length > 0 && !selectedFileId) {
       setSelectedFileId(newUploadedFiles[0].id);
     }
-    setIsLoadingJson(false); // Done with initial parsing
-    event.target.value = ''; // Reset file input
+    setIsLoadingJson(false);
+    event.target.value = '';
   };
 
   const handleRemoveFile = (fileIdToRemove: string) => {
@@ -71,6 +72,7 @@ export default function HomePage() {
       setParsedJsonData(null);
       setImageSuggestions([]);
       setStartingImageIndex(0);
+      setImageSearchTerm('');
     }
     const removedFile = uploadedFiles.find(f => f.id === fileIdToRemove);
     toast({
@@ -84,13 +86,15 @@ export default function HomePage() {
       setParsedJsonData(null);
       setImageSuggestions([]);
       setStartingImageIndex(0);
+      setImageSearchTerm('');
       return;
     }
 
-    setIsLoadingJson(true); // For setting parsedJsonData display
+    setIsLoadingJson(true);
     setParsedJsonData(file.parsedContent);
     setIsLoadingJson(false);
     setStartingImageIndex(0);
+    setImageSearchTerm(''); // Reset search term on new file
 
     setIsLoadingSuggestions(true);
     try {
@@ -99,10 +103,9 @@ export default function HomePage() {
       const MAX_RETRIES = 1; 
       let attempt = 0;
 
-      if (extractedKeys.length > 0) { // Only call AI if there are keys to analyze
+      if (extractedKeys.length > 0) {
         while (attempt <= MAX_RETRIES) {
           try {
-            // Pass only the extracted keys to the AI flow
             const aiSuggestionsOutput = await suggestImageFields({ jsonKeys: extractedKeys });
             aiSuggestedFields = aiSuggestionsOutput.imageFields || [];
             break; 
@@ -148,10 +151,8 @@ export default function HomePage() {
           }
         }
       } else {
-        // No keys extracted, perhaps an empty JSON or non-object JSON
         aiSuggestedFields = [];
       }
-
 
       try {
         const foundImages = findImagesInJson(file.parsedContent, aiSuggestedFields);
@@ -163,7 +164,6 @@ export default function HomePage() {
           description: "Ocurrió un error al procesar las imágenes. Se intentará detección básica.",
           variant: "destructive",
         });
-        // Fallback to finding images without AI suggestions if findImagesInJson itself fails
         const foundImages = findImagesInJson(file.parsedContent); 
         setImageSuggestions(foundImages);
       }
@@ -174,7 +174,7 @@ export default function HomePage() {
         description: "Ocurrió un error inesperado al procesar el archivo.",
         variant: "destructive",
       });
-      setImageSuggestions([]); // Reset images on overall error
+      setImageSuggestions([]);
     } finally {
       setIsLoadingSuggestions(false);
     }
@@ -184,15 +184,13 @@ export default function HomePage() {
     if (selectedFileId && uploadedFiles.length > 0) {
         const currentSelectedFile = uploadedFiles.find(f => f.id === selectedFileId);
         if (currentSelectedFile) {
-            // Check if the content to be processed is actually different or if it's the first time
-            // For simplicity, always re-process if the selectedFile.id changes
-            // More sophisticated checks could compare file.content if needed, but parsedContent is derived.
              processFileContent(currentSelectedFile);
         } else {
           setSelectedFileId(null); 
           setParsedJsonData(null);
           setImageSuggestions([]);
           setStartingImageIndex(0);
+          setImageSearchTerm('');
         }
     } else if (!selectedFileId) {
         setParsedJsonData(null);
@@ -200,10 +198,42 @@ export default function HomePage() {
         setIsLoadingJson(false);
         setIsLoadingSuggestions(false);
         setStartingImageIndex(0);
+        setImageSearchTerm('');
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedFileId, processFileContent]); // processFileContent is memoized with useCallback
-                                          // uploadedFiles is not in deps, selectedFileId triggers the effect.
+  }, [selectedFileId, processFileContent]); 
+
+  // Filter images based on search term
+  const filteredImageSuggestions = useMemo(() => {
+    if (!imageSearchTerm.trim()) {
+      return imageSuggestions;
+    }
+    const searchTermLower = imageSearchTerm.toLowerCase();
+    return imageSuggestions.filter(image => {
+      const pathMatch = image.jsonPath.toLowerCase().includes(searchTermLower);
+      const valueMatch = image.value.toLowerCase().includes(searchTermLower);
+      
+      let parentObjectMatch = false;
+      if (parsedJsonData) {
+        const parentObject = getParentObject(parsedJsonData, image.jsonPath);
+        if (parentObject) {
+          try {
+            const parentObjectString = JSON.stringify(parentObject).toLowerCase();
+            parentObjectMatch = parentObjectString.includes(searchTermLower);
+          } catch (e) {
+            console.error("Error stringifying parent object for search:", e);
+          }
+        }
+      }
+      return pathMatch || valueMatch || parentObjectMatch;
+    });
+  }, [imageSuggestions, imageSearchTerm, parsedJsonData]);
+
+  // Reset pagination when search term changes
+  useEffect(() => {
+    setStartingImageIndex(0);
+  }, [imageSearchTerm]);
+
 
   const handleToggleJsonContent = () => {
     setShowJsonContent(prev => !prev);
@@ -230,9 +260,9 @@ export default function HomePage() {
           <>
             <div className="flex-1 min-h-[300px] md:min-h-0 md:h-1/2">
               <ImagePreviewPanel 
-                images={imageSuggestions} 
+                images={filteredImageSuggestions} 
                 parsedJsonData={parsedJsonData}
-                isLoading={isLoadingSuggestions && !selectedFileId} // Only show image panel loading if no file selected
+                isLoading={isLoadingSuggestions && !selectedFileId} 
                 jsonSelected={!!selectedFileId}
                 imagesToShow={imagesToShow}
                 setImagesToShow={setImagesToShow}
@@ -240,12 +270,14 @@ export default function HomePage() {
                 setImageGridColumns={setImageGridColumns}
                 startingImageIndex={startingImageIndex}
                 setStartingImageIndex={setStartingImageIndex}
+                imageSearchTerm={imageSearchTerm}
+                setImageSearchTerm={setImageSearchTerm}
               />
             </div>
             <div className="flex-1 min-h-[300px] md:min-h-0 md:h-1/2">
               <JsonViewer 
                 data={parsedJsonData} 
-                isLoading={isLoadingJson && !selectedFileId} // Only show json viewer loading if no file selected
+                isLoading={isLoadingJson && !selectedFileId} 
                 showContent={showJsonContent}
                 onToggleShowContent={handleToggleJsonContent}
               />
