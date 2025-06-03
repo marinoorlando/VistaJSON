@@ -15,6 +15,7 @@ interface ImagePreviewPanelProps {
   parsedJsonData: any | null;
   isLoading: boolean;
   jsonSelected: boolean;
+  selectedFileName: string | null;
   imagesToShow: number;
   setImagesToShow: (count: number) => void;
   imageGridColumns: number;
@@ -42,6 +43,7 @@ const ImagePreviewPanel: React.FC<ImagePreviewPanelProps> = ({
   parsedJsonData,
   isLoading, 
   jsonSelected,
+  selectedFileName,
   imagesToShow,
   setImagesToShow,
   imageGridColumns,
@@ -74,6 +76,14 @@ const ImagePreviewPanel: React.FC<ImagePreviewPanelProps> = ({
      noImagesMessage = 'Ajuste "Empezar desde Img Nº" o "Mostrar Cant." para ver las imágenes filtradas.';
   }
 
+  let descriptionText = "Seleccione un archivo para ver las imágenes.";
+  if (jsonSelected) {
+    descriptionText = `Mostrando ${displayedImages.length} de ${images.length} imágenes ${imageSearchTerm ? 'filtradas' : 'totales'}.`;
+    if (selectedFileName) {
+      descriptionText += ` (del archivo: ${selectedFileName})`;
+    }
+  }
+
 
   return (
     <Card className="flex-1 flex flex-col min-h-0 shadow-lg">
@@ -83,9 +93,7 @@ const ImagePreviewPanel: React.FC<ImagePreviewPanelProps> = ({
           Previsualización de Imágenes
         </CardTitle>
         <CardDescription className="text-xs">
-          {jsonSelected 
-            ? `Mostrando ${displayedImages.length} de ${images.length} imágenes ${imageSearchTerm ? 'filtradas' : 'totales'}.`
-            : "Seleccione un archivo para ver las imágenes."}
+          {descriptionText}
         </CardDescription>
         
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-2 pt-2 border-t border-border items-end">

@@ -164,23 +164,21 @@ export default function HomePage() {
             const parts: string[] = [];
             for (const key in parentObject) {
               if (Object.prototype.hasOwnProperty.call(parentObject, key)) {
-                parts.push(key); // Always include the key name in the searchable context
+                parts.push(key); 
                 const value = parentObject[key];
                 const lowerKey = key.toLowerCase();
 
-                // Only include the value if it's a string/number/boolean AND its key is NOT a literal data URI key
                 if (!LITERAL_DATA_URI_KEYWORDS.includes(lowerKey)) {
                     if (typeof value === 'string') {
                         parts.push(value);
                     } else if (typeof value === 'number' || typeof value === 'boolean') {
                         parts.push(String(value));
                     }
-                    // Intentionally DO NOT process/stringify nested objects or arrays here for performance.
                 }
               }
             }
             searchableContext = parts.join(' '); 
-          } else if (parentObject) { // Parent might be a primitive if image path is very shallow
+          } else if (parentObject) { 
              try {
                 searchableContext = JSON.stringify(parentObject);
              } catch(e) {/* ignore */}
@@ -246,13 +244,11 @@ export default function HomePage() {
       const pathMatch = image.jsonPath.toLowerCase().includes(searchTermLower);
       if (pathMatch) return true;
   
-      // Only search in image.value if it's a URL (not a Data URI)
       if (image.type === 'url') {
         const valueMatch = image.value.toLowerCase().includes(searchTermLower);
         if (valueMatch) return true;
       }
       
-      // Search in the pre-calculated searchableParentContext
       if (image.searchableParentContext) {
         if (image.searchableParentContext.toLowerCase().includes(searchTermLower)) {
           return true;
@@ -297,6 +293,7 @@ export default function HomePage() {
                 parsedJsonData={parsedJsonData}
                 isLoading={isLoadingSuggestions && !selectedFileId} 
                 jsonSelected={!!selectedFileId}
+                selectedFileName={selectedFile?.name || null}
                 imagesToShow={imagesToShow}
                 setImagesToShow={setImagesToShow}
                 imageGridColumns={imageGridColumns}
