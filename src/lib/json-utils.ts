@@ -1,9 +1,12 @@
 
 import type { FoundImage } from '@/types';
 
-const IMAGE_KEYWORDS = ["image", "url", "path", "uri", "foto", "img"];
-// Regex to match standard Data URIs for images, now more permissive for MIME types
-// Allows any characters for image subtype, e.g. image/bmp, image/tiff, etc.
+// Keywords that strongly suggest the field's value *is* the image data (likely base64 or a full Data URI)
+const LITERAL_DATA_URI_KEYWORDS = ["datauri", "base64", "imagedata", "embeddedimage", "inlineimage"];
+// Keywords that suggest the field's value is a path or URL to an image
+const GENERIC_IMAGE_URL_KEYWORDS = ["image", "url", "path", "uri", "foto", "img", "icon", "avatar", "thumbnail", "picture"];
+
+// Regex to match standard Data URIs for images, permissive for MIME types
 const DATA_URI_REGEX = /data:image\/[a-zA-Z0-9.+*-]+;base64,([A-Za-z0-9+/]+={0,2})/gi;
 
 // Helper function to extract all unique keys from a JSON object
@@ -15,10 +18,10 @@ export function getAllUniqueKeys(data: any): string[] {
     }
     Object.keys(obj).forEach(key => {
       keys.add(key);
-      if (typeof obj[key] === 'object' && !Array.isArray(obj[key])) { // Traverse objects, not array elements directly for keys
+      if (typeof obj[key] === 'object' && !Array.isArray(obj[key])) {
         traverse(obj[key]);
       } else if (Array.isArray(obj[key])) {
-        obj[key].forEach((item: any) => traverse(item)); // Traverse items in arrays
+        obj[key].forEach((item: any) => traverse(item));
       }
     });
   }
@@ -39,29 +42,30 @@ export function findImagesInJson(jsonData: any, suggestedFields: string[] = []):
       const newPath = currentPath ? `${currentPath}.${key}` : key;
       if (typeof value === 'string') {
         let imageType: FoundImage['type'] | null = null;
-        let potentialImageUrl = value.trim(); 
+        let potentialImageUrl = value.trim();
+        const lowerKey = key.toLowerCase();
 
-        // 1. Check for Data URIs within the string using regex
+        // 1. Check for well-formed Data URIs using regex
         DATA_URI_REGEX.lastIndex = 0; // Reset regex state for global flag
         const dataUriMatch = DATA_URI_REGEX.exec(potentialImageUrl);
         if (dataUriMatch && dataUriMatch[0]) {
           imageType = 'dataUri';
-          potentialImageUrl = dataUriMatch[0]; // Use the full matched Data URI
-        } 
+          potentialImageUrl = dataUriMatch[0].trim(); // Ensure matched Data URI is also trimmed
+        }
         // 2. Else, check for absolute URLs
         else if (potentialImageUrl.startsWith('http://') || potentialImageUrl.startsWith('https://')) {
           imageType = 'url';
-          // potentialImageUrl is already the trimmed value
-        } 
-        // 3. Else, rely on key name hints for potential relative paths or other URLs
-        else {
-          const lowerKey = key.toLowerCase();
-          if (suggestedFields.includes(key) || IMAGE_KEYWORDS.some(k => lowerKey.includes(k))) {
-             imageType = 'url'; // Assume it's a relative or resolvable URL
-             // potentialImageUrl is already the trimmed value
-          }
         }
-        
+        // 3. Else, if key name strongly suggests it's a Data URI (even if malformed or just base64)
+        else if (LITERAL_DATA_URI_KEYWORDS.some(k => lowerKey.includes(k))) {
+          imageType = 'dataUri'; // Let ImageCard try and show its specific error if value is not a renderable Data URI
+        }
+        // 4. Else, if key name suggests a general image URL (could be relative)
+        // This includes AI suggested fields that don't fall into the above categories.
+        else if (suggestedFields.includes(key) || GENERIC_IMAGE_URL_KEYWORDS.some(k => lowerKey.includes(k))) {
+             imageType = 'url';
+        }
+
         if (imageType && !uniqueImageValues.has(potentialImageUrl)) {
           images.push({ jsonPath: newPath, value: potentialImageUrl, type: imageType });
           uniqueImageValues.add(potentialImageUrl);
@@ -78,4 +82,3 @@ export function findImagesInJson(jsonData: any, suggestedFields: string[] = []):
   traverse(jsonData, '');
   return images;
 }
-
