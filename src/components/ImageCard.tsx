@@ -4,7 +4,7 @@ import NextImage from 'next/image';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { ScrollArea } from '@/components/ui/scroll-area';
+// ScrollArea import removed as it's no longer used in this file
 import type { FoundImage } from '@/types';
 import { Link2, Info } from 'lucide-react';
 import { getParentObject } from '@/lib/json-utils';
@@ -43,16 +43,16 @@ const ImageCard: React.FC<ImageCardProps> = ({ image, parsedJsonData }) => {
       setDetailObject(parentObj);
 
       const pathSegments = image.jsonPath.replace(/\[(\d+)\]/g, '.$1').split('.');
-      let parentDisplayPath = "Objeto Raíz"; 
+      let parentDisplayPath = "Objeto Raíz";
       if (pathSegments.length > 1) {
-        pathSegments.pop(); 
-        parentDisplayPath = pathSegments.join('.').replace(/\.(\d+)/g, '[$1]'); 
+        pathSegments.pop();
+        parentDisplayPath = pathSegments.join('.').replace(/\.(\d+)/g, '[$1]');
       }
       setDetailObjectPath(parentDisplayPath);
       setIsDetailModalOpen(true);
     } else {
       setDetailObject({ error: "No se pudo determinar el objeto contenedor." });
-      setDetailObjectPath(image.jsonPath); 
+      setDetailObjectPath(image.jsonPath);
       setIsDetailModalOpen(true);
     }
   };
@@ -169,11 +169,11 @@ const ImageCard: React.FC<ImageCardProps> = ({ image, parsedJsonData }) => {
                   </p>
                 )}
               </div>
-              <ScrollArea className="max-h-[55vh] mt-2 border rounded-md">
-                <pre className="text-sm bg-card p-3 font-code overflow-auto">
+              <div className="max-h-[55vh] mt-2 border rounded-md overflow-auto">
+                <pre className="text-sm bg-card p-3 font-code">
                   <code dangerouslySetInnerHTML={{ __html: highlightedJsonHtml }} />
                 </pre>
-              </ScrollArea>
+              </div>
             </DialogContent>
           </Dialog>
         </div>
