@@ -1,5 +1,5 @@
 
-import type React from 'react';
+import React, { useState, useEffect } from 'react';
 import NextImage from 'next/image';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import type { FoundImage } from '@/types';
@@ -10,20 +10,36 @@ interface ImageCardProps {
 }
 
 const ImageCard: React.FC<ImageCardProps> = ({ image }) => {
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    // Reset error state if the image source changes
+    setHasError(false);
+  }, [image.value]);
+
   const isAbsoluteUrl = image.type === 'url' && (image.value.startsWith('http://') || image.value.startsWith('https://'));
   const isDataUri = image.type === 'dataUri';
 
   let imageContent;
 
   if (isDataUri) {
-    imageContent = (
-      <img
-        src={image.value}
-        alt={`Imagen de ${image.jsonPath}`}
-        className="object-contain w-full h-full"
-        data-ai-hint="abstract illustration"
-      />
-    );
+    if (hasError) {
+      imageContent = (
+        <div className="flex items-center justify-center h-full w-full bg-muted text-destructive-foreground p-2 text-center text-xs" data-ai-hint="error message">
+          Error al cargar Data URI de: {image.jsonPath}. Verifique el formato en el archivo JSON.
+        </div>
+      );
+    } else {
+      imageContent = (
+        <img
+          src={image.value}
+          alt={`Imagen Data URI de ${image.jsonPath}`}
+          className="object-contain w-full h-full"
+          data-ai-hint="embedded illustration"
+          onError={() => setHasError(true)}
+        />
+      );
+    }
   } else if (isAbsoluteUrl) {
     imageContent = (
       <NextImage
@@ -33,7 +49,6 @@ const ImageCard: React.FC<ImageCardProps> = ({ image }) => {
         className="object-contain"
         data-ai-hint="digital art"
         onError={(e) => {
-          // Fallback for broken image URLs
           const target = e.target as HTMLImageElement;
           target.srcset = 'https://placehold.co/300x200.png?text=Error+Al+Cargar';
           target.src = 'https://placehold.co/300x200.png?text=Error+Al+Cargar';
@@ -41,13 +56,13 @@ const ImageCard: React.FC<ImageCardProps> = ({ image }) => {
       />
     );
   } else {
-    // For 'url' types that are not absolute (e.g., relative paths, malformed)
+    // For 'url' types that are not absolute (e.g., relative paths, malformed) or if type is somehow else
     imageContent = (
       <img
         src="https://placehold.co/300x200.png?text=Ruta+Inválida"
-        alt={`Ruta inválida para ${image.jsonPath}`}
+        alt={`Ruta inválida o tipo no manejado para ${image.jsonPath}`}
         className="object-contain w-full h-full"
-        data-ai-hint="broken link"
+        data-ai-hint="broken link placeholder"
       />
     );
   }
@@ -65,7 +80,7 @@ const ImageCard: React.FC<ImageCardProps> = ({ image }) => {
       <CardFooter className="p-2 bg-secondary/20">
         <CardDescription className="text-xs truncate flex items-center" title={image.value}>
           <Link2 className="h-3 w-3 mr-1 shrink-0" />
-          {image.value}
+          {image.value.length > 100 ? `${image.value.substring(0, 97)}...` : image.value}
         </CardDescription>
       </CardFooter>
     </Card>
